@@ -25,8 +25,11 @@ tools\vasmm68k_mot.exe -m68000 -Fhunk -linedebug -o build\main.o main.asm
 tools\vlink.exe -bamigahunk -Bstatic -o uae\dh0\invaders build\main.o
 ```
 
-- Toolchain is vendored in `tools/` (prb28/vscode-amiga-assembly-binaries,
-  `windows_x64` branch: vasm 1.9, vlink 0.17, FS-UAE, ADF tools).
+- Toolchain lives in `tools/` (prb28/vscode-amiga-assembly-binaries,
+  `windows_x64` branch: vasm 1.9, vlink 0.17, FS-UAE, ADF tools) but is
+  **gitignored**, as are `roms/`, `build/` and the built exe — a fresh
+  clone needs `scripts/get-tools.sh` (or the README's PowerShell steps)
+  plus a Kickstart image before it builds/runs.
 - **FS-UAE must be launched with working directory = `tools/`** — it loads
   `fs-uae.dat` relative to cwd and silently dies early otherwise.
 - `roms/kick13.rom`: Kickstart 1.3 image, not redistributable (copied from
@@ -36,6 +39,18 @@ tools\vlink.exe -bamigahunk -Bstatic -o uae\dh0\invaders build\main.o
   Ctrl+Shift+B = build. "create ADF" task -> `build/invaders.adf`.
 - Emulator keyboard-as-joystick: cursor keys + Right Ctrl/Alt = fire
   (`--joystick_port_1=keyboard`).
+
+## Repo layout
+
+```
+main.asm            the whole game
+scripts/            build/run (.ps1 + .sh) and get-tools.sh
+doc/                walkthrough + line-by-line deep dives
+.vscode/            Amiga Assembly extension config (tracked)
+uae/dh0/            emulator hard drive; s/startup-sequence tracked, exe not
+tools/, roms/       gitignored: toolchain + Kickstart (see Build & run)
+build/              gitignored: intermediate objects, ADF output
+```
 
 ## Documentation
 
