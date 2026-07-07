@@ -1,0 +1,22 @@
+# Build output
+build/
+uae/dh0/invaders
+*.o
+*.adf
+
+# Kickstart ROMs — copyrighted, never commit
+roms/
+*.rom
+
+# Vendored toolchain (re-download: prb28/vscode-amiga-assembly-binaries,
+# branch windows_x64; see CLAUDE.md)
+tools/
+
+# Emulator/runtime junk
+*.uae.log
+*.stackdump
+
+# OS junk
+Thumbs.db
+Desktop.ini
+.DS_Store
