@@ -1,7 +1,5 @@
 # SPACE INVADERS — Amiga 500
 
-![Screenshot](img/in-game2.jpg)
-
 ## Why this exists
 
 If you want to just dive into the project, you can skip this subsection. If you're interested in the backstory, read on.
@@ -123,3 +121,8 @@ Linux / macOS (also works in Git Bash on Windows):
    remote debugger attached (breakpoints, registers, copper disassembly).
 4. Task "amigaassembly: create ADF" produces `build/invaders.adf` for
    real hardware.
+
+## Pictures
+
+![In-game view](img/in-game2.jpg)
+![Title screen](img/title-screen1.jpg)
