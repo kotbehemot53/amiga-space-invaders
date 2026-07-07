@@ -503,10 +503,13 @@ MoveFormation:
 	clr.w	DownFlag
 	addq.w	#8,FormY
 	neg.w	FormDir
-	; invasion check: formation bottom reaching shields?
-	move.w	FormY,d0
-	add.w	#ROWS*CELLH,d0
-	cmp.w	#SHIELDY-8,d0
+	; invasion when the lowest LIVE alien touches the shields
+	bsr	LowestRow		; d0 = lowest live row, -1 if none
+	bmi.s	.redraw
+	lsl.w	#4,d0			; row*16
+	add.w	FormY,d0
+	addq.w	#8,d0			; alien bottom edge
+	cmp.w	#SHIELDY,d0
 	blt.s	.redraw
 	bra	GameOverEnter
 .horiz	move.w	FormDir,d0
@@ -529,6 +532,20 @@ MoveFormation:
 	move.w	#1,DownFlag
 .redraw	bra	DrawAliens
 
+;-------------------------------- lowest row with a live alien
+; -> d0 = row index 0..ROWS-1, or -1 if the table is empty (trashes d1/a0)
+LowestRow:
+	lea	AlienTab+ROWS*COLS,a0
+	moveq	#ROWS-1,d0
+.row	moveq	#COLS-1,d1
+.col	tst.b	-(a0)
+	bne.s	.done
+	dbf	d1,.col
+	subq.w	#1,d0
+	bpl.s	.row
+	moveq	#-1,d0
+.done	rts
+
 ;-------------------------------- redraw whole formation (blitter)
 DrawAliens:
 	; clear the formation band (full width, from FormY-8)
@@ -537,7 +554,13 @@ DrawAliens:
 	moveq	#0,d0
 	moveq	#20,d2			; 20 words = 320px
 	move.w	#ROWS*CELLH+16,d3
-	lea	Plane0,a1
+	; deep formations: never clear into the shield band
+	move.w	#SHIELDY,d4
+	sub.w	d1,d4
+	cmp.w	d4,d3
+	ble.s	.hok
+	move.w	d4,d3
+.hok	lea	Plane0,a1
 	bsr	ClearRect
 
 	move.w	#$7fff,EdgeMinX
