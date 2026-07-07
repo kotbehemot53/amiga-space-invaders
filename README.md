@@ -126,3 +126,4 @@ Linux / macOS (also works in Git Bash on Windows):
 
 ![In-game view](img/in-game2.jpg)
 ![Title screen](img/title-screen1.jpg)
+![Amiga Setup](img/setup.jpg)
