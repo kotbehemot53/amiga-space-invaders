@@ -1,5 +1,7 @@
 # SPACE INVADERS — Amiga 500
 
+![Screenshot](img/in-game2.jpg)
+
 ## Why this exists
 
 If you want to just dive into the project, you can skip this subsection. If you're interested in the backstory, read on.
