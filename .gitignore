@@ -15,8 +15,10 @@ tools/
 # Emulator/runtime junk
 *.uae.log
 *.stackdump
+uae/dh0/myprogram
 
 # OS junk
 Thumbs.db
 Desktop.ini
 .DS_Store
+
