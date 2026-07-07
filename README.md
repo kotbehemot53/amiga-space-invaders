@@ -2,15 +2,15 @@
 
 ## Why this exists
 
-If you want to just dive into the project, you can skip this subsection. If you're interested in a backstory, read on.
+If you want to just dive into the project, you can skip this subsection. If you're interested in the backstory, read on.
 
-The whole project, except for this here subsection of the README was written solely by an LLM (Claude Fable 5 in particular). I've done it as an experiment to see how good Fable is, while I can test it as part of my regular Claude Pro license (which is possible until today).
+The whole project, except for this here subsection of the README, was written solely by an LLM (Claude Fable 5 in particular). I've done it as an experiment to see how good Fable is, while I can test it as part of my regular Claude Pro license (which is possible until today).
 
-On a day-to-day basis, I work as a developer, but on a much higher-level than assembly. I am an Amiga enthusiast though, and in my spare time have dabbled briefly in some x86 and m68k assembly in the past (but on a very shallow level).
+On a day-to-day basis, I work as a developer, but on a much higher level than assembly. I am an Amiga enthusiast though, and in my spare time have dabbled briefly in some x86 and m68k assembly in the past (but on a very shallow level and I remember very little).
 
 In my regular work I use LLMs a lot (Claude mostly), and being a senior dev, I think it can be an invaluable help, taking the mundane tasks off your shoulders, and allowing you to focus on the big picture: modelling the part of reality you're working on, thinking on the architecture, and so on.
 
-I am well aware of the risks that AI brings to the industry and the world as a whole though. Cognitive decay and cognitive debt are very real. The human developer has to remain in control - they have to understand thoroughly what the LLM does, they have to review it carefuly, and they have to take full responsibility for what was written as if they wrote it all themselves. Only then it can work in the long run, and be actually useful.
+I am well aware of the risks that AI brings to the industry and the world as a whole though. Cognitive decay, and cognitive debt are very real. The human developer has to remain in control - they have to understand thoroughly what the LLM does, they have to review it carefuly, and they have to take full responsibility for what was written as if they wrote it all themselves. Only then it can work in the long run, and be actually useful.
 
 In this particular case though, I wanted to make an experiment and have some fun. I wanted to "vibe-code" something, without following the LLM closely, or even understanding the code, and to see what comes out of it.
 
@@ -20,7 +20,7 @@ Here's the prompt I used:
 Yo dawg, write me a game compatible with the Amiga 500 computer. It should be written in Motorola 68k assembly, and should utilise Amiga custom chipset wherever it makes sense. It should show off its audio-visual capabilities and run smoothly on an A500 with 512 kb Chip RAM + 512 kb "slow RAM". It should be a clone of Space Invaders, with score counting, scoreboard, joystick control. I did some Amiga ASM projects a long time ago - they are in the "D:\amiga_exp" directory, they utilised VSCode, FS-UAE for debugging, vasm for assemblying, but I'm not sure if my system is still configured to work like this. If not, tell me how to prepare it.
 ```
 
-After this, Fable worked completely on its own. The initial "thinking" time was quite long (over 40 minutes), then it paused occasionally to ask me for permission to run various scripts - other than that there was no interrputions and no need for me to stop it or correct it. In total it took about 1.5h. The LLM installed the whole toolchain on its own, ran and debugged its work periodically on its own, including running the emulator and taking screenshots to see if the game looks right (and correcting when it didn't). I must admit it was quite amazing.
+After this, Fable worked completely on its own. The initial "thinking" time was quite long (over 40 minutes), then it paused occasionally to ask me for permission to run various scripts - other than that there was no interrputions, and no need for me to stop it or correct it. In total it took about 1.5h. The LLM installed the whole toolchain on its own, ran and debugged its work periodically on its own, including running the emulator and taking screenshots to see if the game looks right (and correcting when it didn't - for example explosions looked wrong at first, and it fixed it solely by looking at the screenshots, with no prompting whatsoever). I must admit it was quite amazing.
 
 I wanted to keep it all at least somewhat educational, so I asked my dear clanker to write an extensive walkthrough of the code (see the `doc` directory). There's also a `CLAUDE.md` file to easily kickstart further work with Claude Code. Feel free to read it, run it, play with it, and fork it to your heart's content.
 
