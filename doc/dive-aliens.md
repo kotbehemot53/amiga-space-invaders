@@ -27,7 +27,13 @@ DrawAliens:
 	moveq	#0,d0
 	moveq	#20,d2			; 20 words = 320px
 	move.w	#ROWS*CELLH+16,d3
-	lea	Plane0,a1
+	; deep formations: never clear into the shield band
+	move.w	#SHIELDY,d4
+	sub.w	d1,d4
+	cmp.w	d4,d3
+	ble.s	.hok
+	move.w	d4,d3
+.hok	lea	Plane0,a1
 	bsr	ClearRect
 ```
 
@@ -46,6 +52,14 @@ DrawAliens:
 - `move.w #ROWS*CELLH+16,d3` — height: 5 rows × 16 px + 16 margin = 96
   raster lines. The expression is evaluated by the assembler, not at
   runtime — `ROWS*CELLH+16` is documentation that costs nothing.
+- The `SHIELDY` clamp: once the surviving rows have marched deep, the
+  96-line band would reach past y = 192 and the clear would eat the
+  tops of the shields. `192 − band_top` is the tallest clear that stays
+  above them; take the minimum. (Deep descents are possible because the
+  invasion check in `MoveFormation` is based on the lowest *living*
+  row — `LowestRow` scans `AlienTab` backwards — not on the full
+  formation height; killing the bottom rows lets the rest march far
+  lower before game over.)
 - `bsr ClearRect` — D-only blit, minterm $00 (all outputs zero).
   Note this touches only **Plane 0** — text (plane 1) and stars
   (plane 2) physically cannot be harmed, which is the whole point of
