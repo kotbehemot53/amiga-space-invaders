@@ -178,9 +178,8 @@ makes all stars pulse.
 	bpl.s	.gtop
 	moveq	#0,d1
 .gtop	move.w	d5,d0
-	sub.w	#48,d0			; bottom lobe: i - 48
+	sub.w	#44,d0			; bottom lobe: i - 44 (rises to 19)
 	bmi.s	.gnobot
-	lsr.w	#1,d0			; halve -> subtler than top (max 7)
 	cmp.w	d1,d0			; keep the brighter lobe
 	bgt.s	.gfac
 .gnobot	move.w	d1,d0
@@ -226,8 +225,8 @@ emits: one WAIT, optionally one COLOR01 MOVE, and one COLOR00 MOVE.
   gradient. It is **procedural**: a per-entry *factor* is fed to
   `GradColor`, which scales each R/G/B channel of `GradStart` (the current
   wave's top colour) by `factor/32`. The factor is the max of two lobes:
-  a strong one fading from the top (`32 - i`, entries 0..32) and a subtle
-  glow rising toward the bottom (`(i-48)/2`, max 7, entries 48..63), with
+  a strong one fading from the top (`32 - i`, entries 0..32) and a dimmer
+  glow rising toward the bottom (`i - 44`, up to 19, entries 44..63), with
   a black band between. `SetGradient` picks `GradStart` from the 24-entry
   `GradStartTab` (`GradStartTab[Level mod 24]`, wave 1 = `$0007`, the
   original blue) and rebuilds the whole list each wave — so every level

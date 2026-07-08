@@ -299,9 +299,8 @@ BuildCopper:
 	bpl.s	.gtop
 	moveq	#0,d1
 .gtop	move.w	d5,d0
-	sub.w	#48,d0			; bottom lobe: i - 48
+	sub.w	#44,d0			; bottom lobe: i - 44 (rises to 19)
 	bmi.s	.gnobot
-	lsr.w	#1,d0			; halve -> subtler than top (max 7)
 	cmp.w	d1,d0			; keep the brighter lobe
 	bgt.s	.gfac
 .gnobot	move.w	d1,d0
