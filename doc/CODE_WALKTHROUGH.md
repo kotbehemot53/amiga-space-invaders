@@ -17,6 +17,7 @@ readings of the crucial routines**, see the deep dives:
 | [dive-bullet.md](dive-bullet.md) | `MoveBullet`, `AddScore`, `BCDToStr` | three collision styles, BCD scoring with `abcd`, the register-clobber bug |
 | [dive-audio.md](dive-audio.md) | `PlaySound`, `UpdateAudio`, `PlayMarch` | Paula programming, one-shot scheduling, live pitch bends, tail calls |
 | [dive-hiscore.md](dive-hiscore.md) | `HiScoreInsert`, `NameEnter`/`NameState`, `ReadJoyDir`, `CycleCur` | sorted-array insert, joystick-as-keyboard text entry, edge-triggered input, another clobber bug |
+| [dive-text.md](dive-text.md) | `DrawText`, `DrawText2x`, `NibExp`, `Font` | CPU glyph blitting, `y*40` address math, 8x8 bitmap font format, nibble-doubling 2x scaling |
 
 ---
 
