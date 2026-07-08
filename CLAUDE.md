@@ -56,8 +56,9 @@ build/              gitignored: intermediate objects, ADF output
 
 `doc/CODE_WALKTHROUGH.md` = full architecture/hardware explainer for
 high-level-language folks; `doc/dive-*.md` = line-by-line readings of
-the key routines (mainloop, copper, blitter, aliens, bullet/BCD,
-audio). Keep them in sync when changing the routines they quote.
+the key routines (mainloop, copper, gradient, blitter, aliens,
+bullet/BCD, audio). Keep them in sync when changing the routines they
+quote.
 
 ## Source layout (single file, section order matters)
 
