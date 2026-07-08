@@ -24,7 +24,8 @@ After this, Fable worked completely on its own. The initial "thinking" time was 
 
 I wanted to keep it all at least somewhat educational, so I asked my dear clanker to write an extensive walkthrough of the code (see the `doc` directory). There's also a `CLAUDE.md` file to easily kickstart further work with Claude Code. Feel free to read it, run it, play with it, and fork it to your heart's content.
 
-UPDATE:
+### UPDATE:
+
 The initial code did contain one major bug - one would lose prematurely, because the game assumed a fixed size of the "alien block" even if the player killed the bottom rows. I made a commit to fix it, and then a bunch of other commits to fix more minor issues and add some features, like changing background gradients, ability to save your name in the hi-score list and such. These were still done with AI-assistance, but more guided (not fully "vibe-coded") and were written with the help of Opus, not Fable.
 
 Below the LLM-generated content begins.
