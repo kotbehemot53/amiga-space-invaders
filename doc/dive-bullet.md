@@ -80,6 +80,7 @@ MoveBullet:
 	clr.w	UfoAct
 	clr.w	BulAct
 	bsr	HideUfoSpr
+	bsr	SfxUfoStop		; kill looping ch3 warble
 	bsr	SfxUfoHit
 	bsr	Random
 	and.w	#3,d0
@@ -90,8 +91,11 @@ MoveBullet:
 	bra	.done
 ```
 
-Hit: kill both objects, hide the hardware sprite, sound, then score —
-`Random & 3` picks one of four BCD values from `UfoPts`
+Hit: kill both objects, hide the hardware sprite, then **stop the looping
+ch3 warble** (`SfxUfoStop` — the UFO's flight hum plays on `frames=0` = loop
+until stopped, so the kill path must silence it or it lingers forever),
+play the explosion, then score — `Random & 3` picks one of four BCD values
+from `UfoPts`
 (50/100/150/300, mystery bonus like the original). Note `bsr SfxUfoHit`
 runs *before* the random score draw here — safe, because nothing in
 d0–d4 is live across it. Contrast with the alien path below.

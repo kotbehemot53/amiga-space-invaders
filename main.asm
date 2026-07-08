@@ -665,6 +665,7 @@ MoveBullet:
 	clr.w	UfoAct
 	clr.w	BulAct
 	bsr	HideUfoSpr
+	bsr	SfxUfoStop		; kill looping ch3 warble
 	bsr	SfxUfoHit
 	bsr	Random
 	and.w	#3,d0
