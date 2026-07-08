@@ -4,7 +4,7 @@
 
 If you want to just dive into the project, you can skip this subsection. If you're interested in the backstory, read on.
 
-The whole project, except for this here subsection of the README, was written solely by an LLM (Claude Fable 5 in particular). I've done it as an experiment to see how good Fable is, while I can test it as part of my regular Claude Pro license (which is possible until today).
+The whole project, except for this here subsection of the README, was written solely by an LLM (Claude Fable 5 in particular). I've done it as an experiment to see how good Fable is when it comes to dealing with vintage hardware assembly code, while I can test it as part of my regular Claude Pro license (which is possible until today).
 
 On a day-to-day basis, I work as a developer, but on a much higher level than assembly. I am an Amiga enthusiast though, and in my spare time have dabbled briefly in some x86 and m68k assembly in the past (but on a very shallow level and I remember very little).
 
@@ -23,6 +23,9 @@ Yo dawg, write me a game compatible with the Amiga 500 computer. It should be wr
 After this, Fable worked completely on its own. The initial "thinking" time was quite long (over 40 minutes), then it paused occasionally to ask me for permission to run various scripts - other than that there was no interrputions, and no need for me to stop it or correct it. In total it took about 1.5h. The LLM installed the whole toolchain on its own, ran and debugged its work periodically on its own, including running the emulator and taking screenshots to see if the game looks right (and correcting when it didn't - for example explosions looked wrong at first, and it fixed it solely by looking at the screenshots, with no prompting whatsoever). I must admit it was quite amazing.
 
 I wanted to keep it all at least somewhat educational, so I asked my dear clanker to write an extensive walkthrough of the code (see the `doc` directory). There's also a `CLAUDE.md` file to easily kickstart further work with Claude Code. Feel free to read it, run it, play with it, and fork it to your heart's content.
+
+UPDATE:
+The initial code did contain one major bug - one would lose prematurely, because the game assumed a fixed size of the "alien block" even if the player killed the bottom rows. I made a commit to fix it, and then a bunch of other commits to fix more minor issues and add some features, like changing background gradients, ability to save your name in the hi-score list and such. These were still done with AI-assistance, but more guided (not fully "vibe-coded") and were written with the help of Opus, not Fable.
 
 Below the LLM-generated content begins.
 
