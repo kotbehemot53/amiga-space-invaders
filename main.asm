@@ -290,8 +290,9 @@ BuildCopper:
 .noband
 	; COLOR00 procedural gradient step. Two brightness lobes over the
 	; 64 entries: a strong one fading from the top (factor 32-i, entries
-	; 0..32) and a subtle glow rising toward the bottom ((i-48)/2, entries
-	; 48..63). Between them a black band. Factor -> colour by GradColor.
+	; 0..32) and a dimmer glow rising toward the bottom (i-44, up to 19,
+	; entries 44..63). Between them a black band. Factor -> colour by
+	; GradColor. See doc/dive-gradient.md.
 	move.w	d4,d5
 	lsr.w	#2,d5			; entry index i = 0..63
 	moveq	#32,d1

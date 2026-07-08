@@ -18,8 +18,10 @@ are two 16-bit words each:
 - End of list: `WAIT $ffff,$fffe` — a position that never arrives.
 
 A copper list is therefore *data that acts like code*. This routine
-writes that data with the CPU once at startup; after that the CPU never
-touches the display again (except one twinkle word — see below).
+writes that data with the CPU at startup and again at the start of each
+wave (the gradient colour changes per wave — see `dive-gradient.md`);
+between rebuilds the CPU never touches the display (except one twinkle
+word — see below).
 
 Register `a0` is the write cursor into `CopBuf` for the entire routine;
 every `(a0)+` stores one word and advances.
@@ -170,20 +172,9 @@ makes all stars pulse.
 	move.w	#$0182,(a0)+		; COLOR01
 	move.w	(a2)+,(a0)+
 .noband
-	; COLOR00 procedural gradient step: two brightness lobes
-	move.w	d4,d5
-	lsr.w	#2,d5			; entry index i = 0..63
-	moveq	#32,d1
-	sub.w	d5,d1			; top lobe: 32 - i
-	bpl.s	.gtop
-	moveq	#0,d1
-.gtop	move.w	d5,d0
-	sub.w	#44,d0			; bottom lobe: i - 44 (rises to 19)
-	bmi.s	.gnobot
-	cmp.w	d1,d0			; keep the brighter lobe
-	bgt.s	.gfac
-.gnobot	move.w	d1,d0
-.gfac	bsr	GradColor		; d0 = factor -> scaled COLOR00
+	; COLOR00 procedural gradient step (see dive-gradient.md)
+	...factor from entry index i, then...
+	bsr	GradColor		; d0 = factor -> scaled COLOR00
 	move.w	#$0180,(a0)+		; COLOR00
 	move.w	d0,(a0)+
 	addq.w	#4,d4
@@ -222,22 +213,17 @@ emits: one WAIT, optionally one COLOR01 MOVE, and one COLOR00 MOVE.
   *MOVE colour → COLOR01* ($182). This is what re-tints all plane-0
   graphics region by region (red aliens up top, green shields below).
 - Unconditionally: *MOVE computed value → COLOR00* ($180) — the vertical
-  gradient. It is **procedural**: a per-entry *factor* is fed to
-  `GradColor`, which scales each R/G/B channel of `GradStart` (the current
-  wave's top colour) by `factor/32`. The factor is the max of two lobes:
-  a strong one fading from the top (`32 - i`, entries 0..32) and a dimmer
-  glow rising toward the bottom (`i - 44`, up to 19, entries 44..63), with
-  a black band between. `SetGradient` picks `GradStart` from the 24-entry
-  `GradStartTab` (`GradStartTab[Level mod 24]`, wave 1 = `$0007`, the
-  original blue) and rebuilds the whole list each wave — so every level
-  gets a visibly different background.
+  background gradient. The value is **procedural** and **changes every
+  wave**: a per-entry factor scales the wave's top colour down to black.
+  That's a feature in its own right, spanning `SetGradient`, `GradColor`
+  and `GradStartTab` — **see `dive-gradient.md`** for the full line-by-line.
 - `move.l #$fffffffe,(a0)+` — the end sentinel, written as one
   longword (two words: `$ffff` position, `$fffe` mask): wait forever.
   The vertical blank restarts the Copper from the top of `CopBuf`.
 
 ## The payoff
 
-Total: ~230 copper instructions, ~920 bytes, generated once. From then
+Total: ~230 copper instructions, ~920 bytes, generated once per wave. From then
 on, per-scanline palette changes, plane pointer refresh and sprite
 pointer refresh all cost the CPU **zero cycles per frame**. This is the
 Amiga's core design idea: the display is programmable hardware, and the

@@ -11,6 +11,7 @@ readings of the crucial routines**, see the deep dives:
 |---|---|---|
 | [dive-mainloop.md](dive-mainloop.md) | `MainLoop`, `WaitVBL`, `StateTab` | beam-synced timing, jump tables, CIA polling |
 | [dive-copper.md](dive-copper.md) | `BuildCopper` | copper lists, WAIT/MOVE encoding, the line-256 crossing, self-modified display programs |
+| [dive-gradient.md](dive-gradient.md) | `SetGradient`, `GradColor`, `GradStartTab` | procedural per-wave background gradient, fixed-point channel scaling, hue-varied colour table |
 | [dive-blitter.md](dive-blitter.md) | `CalcP0Word`, `BlitObj16`, `BlitCell` | minterms, shifts, modulos, padded gfx, cookie-cut bobs |
 | [dive-aliens.md](dive-aliens.md) | `DrawAliens` | wipe-and-redraw strategy, extent tracking, table-driven gfx selection |
 | [dive-bullet.md](dive-bullet.md) | `MoveBullet`, `AddScore`, `BCDToStr` | three collision styles, BCD scoring with `abcd`, the register-clobber bug |
