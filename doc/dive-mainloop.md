@@ -16,8 +16,7 @@ MainLoop:
 	bsr	TwinkleStars
 
 	move.w	GameState,d0
-	add.w	d0,d0
-	add.w	d0,d0
+	MUL4	d0
 	lea	StateTab(pc),a0
 	move.l	(a0,d0.w),a0
 	jsr	(a0)
@@ -42,9 +41,11 @@ Line by line:
   wobbling the UFO pitch, cycling the star colour.
 - `move.w GameState,d0` — load the current state number (0 = title,
   1 = play, 2 = death, 3 = game over, 4 = wave intro).
-- `add.w d0,d0` twice — multiply by 4, because the table stores 4-byte
-  pointers. Two adds are faster than a multiply and encode smaller
-  than a shift here; you'll see this ×4 idiom everywhere in the file.
+- `MUL4 d0` — multiply by 4, because the table stores 4-byte
+  pointers. `MUL4` is a macro (defined next to `WAITBLT`) that expands
+  to `add.w d0,d0` twice: two adds are faster than a multiply and encode
+  smaller than a shift on the 68000 (8 cycles vs `lsl.w #2`'s 10). You'll
+  see this ×4 idiom everywhere in the file — hence the macro.
 - `lea StateTab(pc),a0` — put the *address* of the table into a0.
   The `(pc)` suffix makes it a program-counter-relative reference
   (position-independent, shorter encoding). `lea` never reads memory —

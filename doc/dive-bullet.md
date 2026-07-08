@@ -83,8 +83,7 @@ MoveBullet:
 	bsr	SfxUfoHit
 	bsr	Random
 	and.w	#3,d0
-	add.w	d0,d0
-	add.w	d0,d0
+	MUL4	d0
 	lea	UfoPts(pc),a0
 	move.l	(a0,d0.w),d0
 	bsr	AddScore
@@ -167,8 +166,7 @@ other way round.
 	; score by row
 	lea	RowPts(pc),a0
 	move.w	d4,d0
-	add.w	d0,d0
-	add.w	d0,d0
+	MUL4	d0
 	move.l	(a0,d0.w),d0
 	bsr	AddScore
 	bsr	SfxExplode		; last: PlaySound eats d0-d4
