@@ -170,17 +170,23 @@ makes all stars pulse.
 	move.w	#$0182,(a0)+		; COLOR01
 	move.w	(a2)+,(a0)+
 .noband
-	; COLOR00 procedural gradient step: start * (32-i)/32 per channel
+	; COLOR00 procedural gradient step: two brightness lobes
 	move.w	d4,d5
 	lsr.w	#2,d5			; entry index i = 0..63
-	moveq	#32,d6
-	sub.w	d5,d6			; factor = 32 - i
-	bpl.s	.gpos
-	moveq	#0,d6			; clamp to 0 for lower two thirds
-.gpos	move.w	GradStart,d3
-	... (extract R/G/B, mulu factor, lsr #5, reassemble) ...
+	moveq	#32,d1
+	sub.w	d5,d1			; top lobe: 32 - i
+	bpl.s	.gtop
+	moveq	#0,d1
+.gtop	move.w	d5,d0
+	sub.w	#48,d0			; bottom lobe: i - 48
+	bmi.s	.gnobot
+	lsr.w	#1,d0			; halve -> subtler than top (max 7)
+	cmp.w	d1,d0			; keep the brighter lobe
+	bgt.s	.gfac
+.gnobot	move.w	d1,d0
+.gfac	bsr	GradColor		; d0 = factor -> scaled COLOR00
 	move.w	#$0180,(a0)+		; COLOR00
-	move.w	d5,(a0)+
+	move.w	d0,(a0)+
 	addq.w	#4,d4
 	cmp.w	#256,d4
 	blt.s	.grad
@@ -217,10 +223,12 @@ emits: one WAIT, optionally one COLOR01 MOVE, and one COLOR00 MOVE.
   *MOVE colour → COLOR01* ($182). This is what re-tints all plane-0
   graphics region by region (red aliens up top, green shields below).
 - Unconditionally: *MOVE computed value → COLOR00* ($180) — the vertical
-  gradient. It is **procedural**: `GradStart` (the current wave's top
-  colour) is scaled per channel by `(32 - i)/32`, so the top line is the
-  full `GradStart` and it fades to black over the top third (entries
-  0..32), black below. `SetGradient` picks `GradStart` from the 24-entry
+  gradient. It is **procedural**: a per-entry *factor* is fed to
+  `GradColor`, which scales each R/G/B channel of `GradStart` (the current
+  wave's top colour) by `factor/32`. The factor is the max of two lobes:
+  a strong one fading from the top (`32 - i`, entries 0..32) and a subtle
+  glow rising toward the bottom (`(i-48)/2`, max 7, entries 48..63), with
+  a black band between. `SetGradient` picks `GradStart` from the 24-entry
   `GradStartTab` (`GradStartTab[Level mod 24]`, wave 1 = `$0007`, the
   original blue) and rebuilds the whole list each wave — so every level
   gets a visibly different background.

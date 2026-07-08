@@ -210,8 +210,9 @@ Two effects in this game come from it:
 
 **The background gradient.** `BuildCopper` writes a WAIT + `MOVE
 COLOR00` pair every 4 scanlines (64 steps). The colour is computed on
-the fly: the wave's top colour `GradStart` scaled by `(32-i)/32` per
-channel, i.e. full at the top fading to black over the top third. Each
+the fly by `GradColor`: the wave's top colour `GradStart` scaled per
+channel by a brightness factor — a strong lobe fading from the top plus a
+subtle glow rising toward the bottom, black band between. Each
 wave `SetGradient` loads a new `GradStart` from `GradStartTab` (24
 colours, `Level mod 24`, wave 1 = the original `$0007` blue) and rebuilds
 the list, so every level looks different. Cost to the CPU per frame:

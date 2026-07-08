@@ -90,10 +90,11 @@ audio). Keep them in sync when changing the routines they quote.
 - Copper list built at runtime by `BuildCopper` into `CopBuf`: bpl+sprite
   pointers, palette, then per-4-lines COLOR00 gradient with a `$ffdf` wait
   crossing raster line 255. Gradient is **procedural**: each COLOR00 step =
-  `GradStart` (current wave's top colour) scaled `(32-i)/32` per channel
-  (full at top → black over top third). `SetGradient` picks `GradStart`
-  from `GradStartTab[Level mod 24]` and rebuilds the list each wave, so
-  every level's background differs; wave 1 = `$0007` (original blue).
+  `GradStart` (current wave's top colour) scaled by a factor via
+  `GradColor`. Factor = max of a strong top lobe (`32-i`) and a subtle
+  bottom glow (`(i-48)/2`), black band between. `SetGradient` picks
+  `GradStart` from `GradStartTab[Level mod 24]` and rebuilds the list each
+  wave, so every level's background differs; wave 1 = `$0007` (blue).
   Sprite pointers must be rewritten every frame (copper does it); sprite
   movement = rewriting pos/ctl words in sprite data.
 - Main loop is vblank-locked via `WaitVBL` (two-phase wait on VPOSR line 303,

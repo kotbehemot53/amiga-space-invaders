@@ -288,34 +288,26 @@ BuildCopper:
 	move.w	#$0182,(a0)+		; COLOR01
 	move.w	(a2)+,(a0)+
 .noband
-	; COLOR00 procedural gradient step: start * (32-i)/32 per channel
+	; COLOR00 procedural gradient step. Two brightness lobes over the
+	; 64 entries: a strong one fading from the top (factor 32-i, entries
+	; 0..32) and a subtle glow rising toward the bottom ((i-48)/2, entries
+	; 48..63). Between them a black band. Factor -> colour by GradColor.
 	move.w	d4,d5
 	lsr.w	#2,d5			; entry index i = 0..63
-	moveq	#32,d6
-	sub.w	d5,d6			; factor = 32 - i
-	bpl.s	.gpos
-	moveq	#0,d6			; clamp to 0 for lower two thirds
-.gpos	move.w	GradStart,d3
-	move.w	d3,d5			; blue
-	and.w	#$f,d5
-	mulu	d6,d5
-	lsr.w	#5,d5			; * factor / 32
-	move.w	d3,d7			; green
-	lsr.w	#4,d7
-	and.w	#$f,d7
-	mulu	d6,d7
-	lsr.w	#5,d7
-	lsl.w	#4,d7
-	or.w	d7,d5
-	move.w	d3,d7			; red
-	lsr.w	#8,d7
-	and.w	#$f,d7
-	mulu	d6,d7
-	lsr.w	#5,d7
-	lsl.w	#8,d7
-	or.w	d7,d5
+	moveq	#32,d1
+	sub.w	d5,d1			; top lobe: 32 - i
+	bpl.s	.gtop
+	moveq	#0,d1
+.gtop	move.w	d5,d0
+	sub.w	#48,d0			; bottom lobe: i - 48
+	bmi.s	.gnobot
+	lsr.w	#1,d0			; halve -> subtler than top (max 7)
+	cmp.w	d1,d0			; keep the brighter lobe
+	bgt.s	.gfac
+.gnobot	move.w	d1,d0
+.gfac	bsr	GradColor		; d0 = factor -> scaled COLOR00
 	move.w	#$0180,(a0)+		; COLOR00
-	move.w	d5,(a0)+
+	move.w	d0,(a0)+
 	addq.w	#4,d4
 	cmp.w	#256,d4
 	blt.s	.grad
@@ -335,6 +327,33 @@ SetGradient:
 	lea	GradStartTab(pc),a0
 	move.w	(a0,d0.w),GradStart
 	bra	BuildCopper
+
+;-------------------------------- scale GradStart by a brightness factor
+; Multiplies each 4-bit R/G/B channel of GradStart by d0/32.
+;   in:  d0 = factor 0..32   out: d0 = scaled $0RGB colour
+;   clobbers d1/d2/d3
+GradColor:
+	move.w	d0,d2			; d2 = factor
+	move.w	GradStart,d1		; d1 = $0RGB source
+	move.w	d1,d0			; blue
+	and.w	#$0f,d0
+	mulu	d2,d0
+	lsr.w	#5,d0			; * factor / 32
+	move.w	d1,d3			; green
+	lsr.w	#4,d3
+	and.w	#$0f,d3
+	mulu	d2,d3
+	lsr.w	#5,d3
+	lsl.w	#4,d3
+	or.w	d3,d0
+	move.w	d1,d3			; red
+	lsr.w	#8,d3
+	and.w	#$0f,d3
+	mulu	d2,d3
+	lsr.w	#5,d3
+	lsl.w	#8,d3
+	or.w	d3,d0
+	rts
 
 ;=====================================================================
 ; STATE: TITLE
