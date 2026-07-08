@@ -78,51 +78,55 @@ GradStartTab:				; 24 per-wave COLOR00 top colours ($0RGB)
   values stay moderate (~7–9) so the background never overpowers the
   plane-0 sprites drawn on top of it.
 
-## Part 2: the brightness curve — the `.grad` loop
+## Part 2: the brightness curve — `GradFactor`
 
 Inside `BuildCopper`, the gradient loop runs 64 times (`d4` = screen line,
-0..252 step 4; entry index `i = d4/4`). The copper-list plumbing (WAIT
-words, the line-256 crossing, the `BandTab` check) is covered in
-`dive-copper.md`; here's only the `COLOR00` part:
+0..252 step 4; entry index `i = d4/4`). For each line it just calls two
+helpers back to back — `GradFactor` (line → factor) then `GradColor`
+(factor → colour) — and emits the resulting `COLOR00` MOVE. The
+copper-list plumbing (WAIT words, the line-256 crossing, the `BandTab`
+check) is covered in `dive-copper.md`.
+
+`GradFactor` turns the entry index `i` (0..63) into a single *brightness
+factor* (0..32). The factor is the **maximum of two triangular lobes**:
 
 ```asm
+; in:  d4 = screen line (0..252, step 4)   out: d0 = factor 0..32
+; clobbers d1/d5
+GradFactor:
 	move.w	d4,d5
 	lsr.w	#2,d5			; entry index i = 0..63
 	moveq	#32,d1
 	sub.w	d5,d1			; top lobe: 32 - i
-	bpl.s	.gtop
+	bpl.s	.top
 	moveq	#0,d1
-.gtop	move.w	d5,d0
+.top	move.w	d5,d0
 	sub.w	#44,d0			; bottom lobe: i - 44 (rises to 19)
-	bmi.s	.gnobot
+	bmi.s	.nobot
 	cmp.w	d1,d0			; keep the brighter lobe
-	bgt.s	.gfac
-.gnobot	move.w	d1,d0
-.gfac	bsr	GradColor		; d0 = factor -> scaled COLOR00
-	move.w	#$0180,(a0)+		; COLOR00
-	move.w	d0,(a0)+
+	bgt.s	.done
+.nobot	move.w	d1,d0
+.done	rts
 ```
-
-The goal is to turn the entry index `i` (0..63) into a single *brightness
-factor* (0..32) that `GradColor` will apply. The factor is the **maximum
-of two triangular lobes**:
 
 - `lsr.w #2,d5` — `i = d4/4`, the entry number 0..63.
 - **Top lobe** `d1 = 32 - i`: at the very top (`i=0`) the factor is 32 =
-  full brightness; it falls to 0 by `i=32` (screen middle). `bpl .gtop`
+  full brightness; it falls to 0 by `i=32` (screen middle). `bpl .top`
   keeps it, otherwise `moveq #0,d1` clamps the negative half to 0. So the
   top lobe lights entries 0..32 and is dark below.
 - **Bottom lobe** `d0 = i - 44`: negative until `i=44`, then climbs to 19
-  at `i=63` (screen bottom). `bmi .gnobot` skips it entirely when
+  at `i=63` (screen bottom). `bmi .nobot` skips it entirely when
   negative (upper part of the screen). Peak 19 < the top's 32, so the
   bottom glow is deliberately dimmer than the top.
-- **Combine** `cmp.w d1,d0` / `bgt .gfac` — take whichever lobe is
+- **Combine** `cmp.w d1,d0` / `bgt .done` — take whichever lobe is
   brighter at this line. Since the lobes never overlap (top dies at 32,
   bottom wakes at 44), the `max` just selects whichever is active, and the
   gap 33..43 stays black — the mid-screen black band.
-- `bsr GradColor` — factor in `d0` → scaled colour in `d0`.
-- `move.w #$0180,(a0)+` / `move.w d0,(a0)+` — emit *MOVE colour →
-  COLOR00*, one copper instruction.
+
+Back in the loop, the factor in `d0` is handed straight to `GradColor`,
+and the returned colour becomes one *MOVE → COLOR00* copper instruction.
+Splitting the work this way mirrors the two questions each line asks —
+*how bright?* (`GradFactor`) and *what colour is that?* (`GradColor`).
 
 Factor as a function of line:
 

@@ -288,24 +288,9 @@ BuildCopper:
 	move.w	#$0182,(a0)+		; COLOR01
 	move.w	(a2)+,(a0)+
 .noband
-	; COLOR00 procedural gradient step. Two brightness lobes over the
-	; 64 entries: a strong one fading from the top (factor 32-i, entries
-	; 0..32) and a dimmer glow rising toward the bottom (i-44, up to 19,
-	; entries 44..63). Between them a black band. Factor -> colour by
-	; GradColor. See doc/dive-gradient.md.
-	move.w	d4,d5
-	lsr.w	#2,d5			; entry index i = 0..63
-	moveq	#32,d1
-	sub.w	d5,d1			; top lobe: 32 - i
-	bpl.s	.gtop
-	moveq	#0,d1
-.gtop	move.w	d5,d0
-	sub.w	#44,d0			; bottom lobe: i - 44 (rises to 19)
-	bmi.s	.gnobot
-	cmp.w	d1,d0			; keep the brighter lobe
-	bgt.s	.gfac
-.gnobot	move.w	d1,d0
-.gfac	bsr	GradColor		; d0 = factor -> scaled COLOR00
+	; COLOR00 procedural gradient step (see doc/dive-gradient.md)
+	bsr	GradFactor		; d0 = brightness factor for this line
+	bsr	GradColor		; d0 = factor -> scaled COLOR00
 	move.w	#$0180,(a0)+		; COLOR00
 	move.w	d0,(a0)+
 	addq.w	#4,d4
@@ -327,6 +312,28 @@ SetGradient:
 	lea	GradStartTab(pc),a0
 	move.w	(a0,d0.w),GradStart
 	bra	BuildCopper
+
+;-------------------------------- gradient brightness factor for one line
+; Two triangular lobes over the 64 gradient entries: a strong one fading
+; from the top (32-i, entries 0..32) and a dimmer glow rising toward the
+; bottom (i-44, up to 19, entries 44..63), max'd together -> black band
+; between. See doc/dive-gradient.md.
+;   in:  d4 = screen line (0..252, step 4)   out: d0 = factor 0..32
+;   clobbers d1/d5
+GradFactor:
+	move.w	d4,d5
+	lsr.w	#2,d5			; entry index i = 0..63
+	moveq	#32,d1
+	sub.w	d5,d1			; top lobe: 32 - i
+	bpl.s	.top
+	moveq	#0,d1
+.top	move.w	d5,d0
+	sub.w	#44,d0			; bottom lobe: i - 44 (rises to 19)
+	bmi.s	.nobot
+	cmp.w	d1,d0			; keep the brighter lobe
+	bgt.s	.done
+.nobot	move.w	d1,d0
+.done	rts
 
 ;-------------------------------- scale GradStart by a brightness factor
 ; Multiplies each 4-bit R/G/B channel of GradStart by d0/32.

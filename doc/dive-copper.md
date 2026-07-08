@@ -173,7 +173,7 @@ makes all stars pulse.
 	move.w	(a2)+,(a0)+
 .noband
 	; COLOR00 procedural gradient step (see dive-gradient.md)
-	...factor from entry index i, then...
+	bsr	GradFactor		; d0 = brightness factor for this line
 	bsr	GradColor		; d0 = factor -> scaled COLOR00
 	move.w	#$0180,(a0)+		; COLOR00
 	move.w	d0,(a0)+
