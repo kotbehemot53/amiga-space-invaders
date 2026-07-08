@@ -123,6 +123,7 @@ Start:
 
 	bsr	InitDisplay
 	bsr	InitAudio
+	move.w	#$0007,GradStart	; title/first-wave background
 	bsr	BuildCopper
 	bsr	DrawStars
 
@@ -264,7 +265,8 @@ BuildCopper:
 	move.w	#$0666,(a0)+
 
 	; per-line background gradient + colour bands for COLOR01
-	lea	GradTab(pc),a1
+	; COLOR00 gradient is procedural: GradStart at the top fading to
+	; black over the top ~third (entries 0..32), black below.
 	lea	BandTab(pc),a2
 	moveq	#0,d4			; screen line 0..252 step 4
 .grad	move.w	d4,d0
@@ -286,14 +288,53 @@ BuildCopper:
 	move.w	#$0182,(a0)+		; COLOR01
 	move.w	(a2)+,(a0)+
 .noband
-	move.w	#$0180,(a0)+		; COLOR00 gradient step
-	move.w	(a1)+,(a0)+
+	; COLOR00 procedural gradient step: start * (32-i)/32 per channel
+	move.w	d4,d5
+	lsr.w	#2,d5			; entry index i = 0..63
+	moveq	#32,d6
+	sub.w	d5,d6			; factor = 32 - i
+	bpl.s	.gpos
+	moveq	#0,d6			; clamp to 0 for lower two thirds
+.gpos	move.w	GradStart,d3
+	move.w	d3,d5			; blue
+	and.w	#$f,d5
+	mulu	d6,d5
+	lsr.w	#5,d5			; * factor / 32
+	move.w	d3,d7			; green
+	lsr.w	#4,d7
+	and.w	#$f,d7
+	mulu	d6,d7
+	lsr.w	#5,d7
+	lsl.w	#4,d7
+	or.w	d7,d5
+	move.w	d3,d7			; red
+	lsr.w	#8,d7
+	and.w	#$f,d7
+	mulu	d6,d7
+	lsr.w	#5,d7
+	lsl.w	#8,d7
+	or.w	d7,d5
+	move.w	#$0180,(a0)+		; COLOR00
+	move.w	d5,(a0)+
 	addq.w	#4,d4
 	cmp.w	#256,d4
 	blt.s	.grad
 
 	move.l	#$fffffffe,(a0)+	; end of copper list
 	rts
+
+;-------------------------------- pick wave gradient + rebuild copper
+; GradStart = GradStartTab[Level mod 24], then regenerate the copper list.
+SetGradient:
+	move.w	Level,d0
+.mod	cmp.w	#24,d0
+	blt.s	.modok
+	sub.w	#24,d0
+	bra.s	.mod
+.modok	add.w	d0,d0			; word index
+	lea	GradStartTab(pc),a0
+	move.w	(a0,d0.w),GradStart
+	bra	BuildCopper
 
 ;=====================================================================
 ; STATE: TITLE
@@ -412,6 +453,7 @@ PlayEnter:
 WaveEnter:
 	move.w	#ST_WAVE,GameState
 	move.w	#40,StateTimer
+	bsr	SetGradient		; per-wave background colour
 	bsr	HideSprites
 	bsr	ClearGamePlanes
 	bsr	DrawHud
@@ -1719,15 +1761,31 @@ BandTab:				; COLOR01 per screen region
 	dc.w	188,$03f6		; shields + player zone: green
 	dc.w	$7fff,0
 
-GradTab:				; COLOR00, one entry per 4 lines
-	dc.w	$0007,$0007,$0006,$0006,$0005,$0005,$0004,$0004
-	dc.w	$0004,$0003,$0003,$0003,$0002,$0002,$0002,$0002
-	dc.w	$0001,$0001,$0001,$0001,$0000,$0000,$0000,$0000
-	dc.w	$0000,$0000,$0000,$0000,$0000,$0000,$0000,$0000
-	dc.w	$0000,$0000,$0100,$0100,$0101,$0101,$0102,$0102
-	dc.w	$0102,$0103,$0103,$0104,$0104,$0105,$0105,$0106
-	dc.w	$0106,$0107,$0107,$0108,$0108,$0209,$0209,$0209
-	dc.w	$0206,$0207,$0207,$0208,$0208,$0209,$0209,$020a
+GradStartTab:				; 24 per-wave COLOR00 top colours ($0RGB)
+	dc.w	$0007			; 1  blue (original)
+	dc.w	$0940			; 2  orange
+	dc.w	$0079			; 3  cyan
+	dc.w	$0806			; 4  magenta
+	dc.w	$0270			; 5  green
+	dc.w	$0902			; 6  red
+	dc.w	$0059			; 7  azure
+	dc.w	$0730			; 8  amber
+	dc.w	$0508			; 9  purple
+	dc.w	$0290			; 10 spring green
+	dc.w	$0904			; 11 crimson
+	dc.w	$0088			; 12 teal
+	dc.w	$0850			; 13 gold
+	dc.w	$0409			; 14 indigo
+	dc.w	$0670			; 15 lime
+	dc.w	$0808			; 16 violet
+	dc.w	$0038			; 17 deep blue
+	dc.w	$0920			; 18 rust
+	dc.w	$0097			; 19 sea green
+	dc.w	$0606			; 20 plum
+	dc.w	$0480			; 21 chartreuse
+	dc.w	$0307			; 22 royal blue
+	dc.w	$0930			; 23 tangerine
+	dc.w	$0099			; 24 aqua
 
 ShieldGfx:				; 24x16, CPU drawn
 	dc.b	$3f,$ff,$fc
@@ -1936,6 +1994,7 @@ StateTimer	ds.w	1
 RndSeed		ds.w	1
 Lives		ds.w	1
 Level		ds.w	1
+GradStart	ds.w	1
 FormX		ds.w	1
 FormY		ds.w	1
 FormDir		ds.w	1

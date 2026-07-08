@@ -209,8 +209,12 @@ That's enough to change *any* hardware setting mid-frame, per scanline.
 Two effects in this game come from it:
 
 **The background gradient.** `BuildCopper` writes a WAIT + `MOVE
-COLOR00` pair every 4 scanlines, stepping through `GradTab` (64 colour
-values, deep blue → black → violet glow). Cost to the CPU per frame:
+COLOR00` pair every 4 scanlines (64 steps). The colour is computed on
+the fly: the wave's top colour `GradStart` scaled by `(32-i)/32` per
+channel, i.e. full at the top fading to black over the top third. Each
+wave `SetGradient` loads a new `GradStart` from `GradStartTab` (24
+colours, `Level mod 24`, wave 1 = the original `$0007` blue) and rebuilds
+the list, so every level looks different. Cost to the CPU per frame:
 zero. The copper repaints it forever.
 
 **The rainbow alien rows.** Everything in plane 0 is "colour 1" — but

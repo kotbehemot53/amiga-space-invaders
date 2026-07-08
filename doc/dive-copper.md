@@ -149,7 +149,6 @@ makes all stars pulse.
 ## Part 5: the gradient and colour bands
 
 ```asm
-	lea	GradTab(pc),a1
 	lea	BandTab(pc),a2
 	moveq	#0,d4			; screen line 0..252 step 4
 .grad	move.w	d4,d0
@@ -171,8 +170,17 @@ makes all stars pulse.
 	move.w	#$0182,(a0)+		; COLOR01
 	move.w	(a2)+,(a0)+
 .noband
-	move.w	#$0180,(a0)+		; COLOR00 gradient step
-	move.w	(a1)+,(a0)+
+	; COLOR00 procedural gradient step: start * (32-i)/32 per channel
+	move.w	d4,d5
+	lsr.w	#2,d5			; entry index i = 0..63
+	moveq	#32,d6
+	sub.w	d5,d6			; factor = 32 - i
+	bpl.s	.gpos
+	moveq	#0,d6			; clamp to 0 for lower two thirds
+.gpos	move.w	GradStart,d3
+	... (extract R/G/B, mulu factor, lsr #5, reassemble) ...
+	move.w	#$0180,(a0)+		; COLOR00
+	move.w	d5,(a0)+
 	addq.w	#4,d4
 	cmp.w	#256,d4
 	blt.s	.grad
@@ -208,9 +216,14 @@ emits: one WAIT, optionally one COLOR01 MOVE, and one COLOR00 MOVE.
   suffices — a merge of two sorted streams. On a hit, emit
   *MOVE colour → COLOR01* ($182). This is what re-tints all plane-0
   graphics region by region (red aliens up top, green shields below).
-- Unconditionally: *MOVE next gradient value → COLOR00* ($180) — the
-  background colour steps through `GradTab`'s 64 entries, the vertical
-  gradient.
+- Unconditionally: *MOVE computed value → COLOR00* ($180) — the vertical
+  gradient. It is **procedural**: `GradStart` (the current wave's top
+  colour) is scaled per channel by `(32 - i)/32`, so the top line is the
+  full `GradStart` and it fades to black over the top third (entries
+  0..32), black below. `SetGradient` picks `GradStart` from the 24-entry
+  `GradStartTab` (`GradStartTab[Level mod 24]`, wave 1 = `$0007`, the
+  original blue) and rebuilds the whole list each wave — so every level
+  gets a visibly different background.
 - `move.l #$fffffffe,(a0)+` — the end sentinel, written as one
   longword (two words: `$ffff` position, `$fffe` mask): wait forever.
   The vertical blank restarts the Copper from the top of `CopBuf`.
