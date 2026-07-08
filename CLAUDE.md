@@ -56,8 +56,9 @@ build/              gitignored: intermediate objects, ADF output
 
 `doc/CODE_WALKTHROUGH.md` = full architecture/hardware explainer for
 high-level-language folks; `doc/dive-*.md` = line-by-line readings of
-the key routines (mainloop, copper, blitter, aliens, bullet/BCD,
-audio). Keep them in sync when changing the routines they quote.
+the key routines (mainloop, copper, gradient, blitter, aliens,
+bullet/BCD, audio). Keep them in sync when changing the routines they
+quote.
 
 ## Source layout (single file, section order matters)
 
@@ -68,8 +69,9 @@ audio). Keep them in sync when changing the routines they quote.
    builder (`BuildCopper`), states (title/play/death/gameover/wave),
    formation logic, blitter helpers, CPU drawing, text, audio routines
 3. CPU-read tables kept **in the code section** so `(pc)`-relative `lea`
-   works: texts, font, palette (`PalTab`), gradient (`GradTab`), colour
-   bands (`BandTab`), `AlienGfxTab`, `RowPts`/`UfoPts` (BCD), `SprPtrTab`
+   works: texts, font, palette (`PalTab`), per-wave gradient top colours
+   (`GradStartTab`, 24 entries), colour bands (`BandTab`), `AlienGfxTab`,
+   `RowPts`/`UfoPts` (BCD), `SprPtrTab`
 4. `section chipdata,data_c` — sprites (`PlayerSpr`, `UfoSpr`, `BlankSpr`),
    blitter gfx (aliens, `ExplGfx`, `LifeIcon`, `CellMask`)
 5. `section data,data` — `HiTab` (top-5) + `HiScore` (persist across games)
@@ -88,8 +90,14 @@ audio). Keep them in sync when changing the routines they quote.
   CPU poking a word inside `CopBuf` via `TwinkPtr`).
 - Copper list built at runtime by `BuildCopper` into `CopBuf`: bpl+sprite
   pointers, palette, then per-4-lines COLOR00 gradient with a `$ffdf` wait
-  crossing raster line 255. Sprite pointers must be rewritten every frame
-  (copper does it); sprite movement = rewriting pos/ctl words in sprite data.
+  crossing raster line 255. Gradient is **procedural**: each COLOR00 step =
+  `GradStart` (current wave's top colour) scaled by a factor via
+  `GradColor`. Factor = max of a strong top lobe (`32-i`) and a dimmer
+  bottom glow (`i-44`, up to 19), black band between. `SetGradient` picks
+  `GradStart` from `GradStartTab[Level mod 24]` and rebuilds the list each
+  wave, so every level's background differs; wave 1 = `$0007` (blue).
+  Sprite pointers must be rewritten every frame (copper does it); sprite
+  movement = rewriting pos/ctl words in sprite data.
 - Main loop is vblank-locked via `WaitVBL` (two-phase wait on VPOSR line 303,
   includes bit 8 through the `$1ff00` mask — don't simplify it away).
 

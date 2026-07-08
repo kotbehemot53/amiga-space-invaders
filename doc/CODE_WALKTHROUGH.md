@@ -11,6 +11,7 @@ readings of the crucial routines**, see the deep dives:
 |---|---|---|
 | [dive-mainloop.md](dive-mainloop.md) | `MainLoop`, `WaitVBL`, `StateTab` | beam-synced timing, jump tables, CIA polling |
 | [dive-copper.md](dive-copper.md) | `BuildCopper` | copper lists, WAIT/MOVE encoding, the line-256 crossing, self-modified display programs |
+| [dive-gradient.md](dive-gradient.md) | `SetGradient`, `GradFactor`, `GradColor`, `GradStartTab` | procedural per-wave background gradient, fixed-point channel scaling, hue-varied colour table |
 | [dive-blitter.md](dive-blitter.md) | `CalcP0Word`, `BlitObj16`, `BlitCell` | minterms, shifts, modulos, padded gfx, cookie-cut bobs |
 | [dive-aliens.md](dive-aliens.md) | `DrawAliens` | wipe-and-redraw strategy, extent tracking, table-driven gfx selection |
 | [dive-bullet.md](dive-bullet.md) | `MoveBullet`, `AddScore`, `BCDToStr` | three collision styles, BCD scoring with `abcd`, the register-clobber bug |
@@ -209,8 +210,13 @@ That's enough to change *any* hardware setting mid-frame, per scanline.
 Two effects in this game come from it:
 
 **The background gradient.** `BuildCopper` writes a WAIT + `MOVE
-COLOR00` pair every 4 scanlines, stepping through `GradTab` (64 colour
-values, deep blue → black → violet glow). Cost to the CPU per frame:
+COLOR00` pair every 4 scanlines (64 steps). The colour is computed on
+the fly by `GradColor`: the wave's top colour `GradStart` scaled per
+channel by a brightness factor — a strong lobe fading from the top plus a
+subtle glow rising toward the bottom, black band between. Each
+wave `SetGradient` loads a new `GradStart` from `GradStartTab` (24
+colours, `Level mod 24`, wave 1 = the original `$0007` blue) and rebuilds
+the list, so every level looks different. Cost to the CPU per frame:
 zero. The copper repaints it forever.
 
 **The rainbow alien rows.** Everything in plane 0 is "colour 1" — but
