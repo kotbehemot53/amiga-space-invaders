@@ -66,7 +66,7 @@ quote.
 
 1. Register equates, layout constants, `WAITBLT` macro
 2. `section code` — startup/restore, main loop (`MainLoop`), copper list
-   builder (`BuildCopper`), states (title/play/death/gameover/wave),
+   builder (`BuildCopper`), states (title/play/death/gameover/wave/name),
    formation logic, blitter helpers, CPU drawing, text, audio routines
 3. CPU-read tables kept **in the code section** so `(pc)`-relative `lea`
    works: texts, font, palette (`PalTab`), per-wave gradient top colours
@@ -74,7 +74,8 @@ quote.
    `RowPts`/`UfoPts` (BCD), `SprPtrTab`
 4. `section chipdata,data_c` — sprites (`PlayerSpr`, `UfoSpr`, `BlankSpr`),
    blitter gfx (aliens, `ExplGfx`, `LifeIcon`, `CellMask`)
-5. `section data,data` — `HiTab` (top-5) + `HiScore` (persist across games)
+5. `section data,data` — `HiTab` (top-5, each entry `ENTSZ`=12 bytes:
+   BCD score long + 8-char `NAMESZ` name) + `HiScore` (persist across games)
 6. `section bss,bss` — all game variables (loader zeroes them)
 7. `section chipbss,bss_c` — 3 bitplanes, `CopBuf` (4 KB), audio buffers
 

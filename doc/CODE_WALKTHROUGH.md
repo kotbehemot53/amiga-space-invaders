@@ -383,9 +383,18 @@ byte-wise. Legit scores are always multiples of 10 — a handy corruption
 canary that actually caught a real bug during development.
 
 **The high-score table** (`HiTab`) lives in the initialised *data*
-section, not BSS, so defaults (7500/5000/…) load with the program and
-survive between games within a session. `GameOverEnter` does a plain
-insertion: find slot, shift the tail down, write.
+section, not BSS, so defaults (7500 STEVO / 4000 BOB / …) load with the
+program and survive between games within a session. Each entry is
+`ENTSZ` = 12 bytes: a BCD score long plus an 8-char name (`NAMESZ`),
+space-padded. `HiScoreInsert` finds the slot, shifts the 12-byte tail
+down, drops the score in with a blank name, and hands back the slot's
+name field in `NamePtr`. If the score qualified, `GameOverEnter` jumps
+to the `ST_NAME` state (`NameEnter`/`NameState`): an old-school
+joystick letter-picker — up/down cycle the letter under the cursor
+through `CharSet` (A-Z 0-9 space), left/right move the cursor, fire
+commits. Input is edge-triggered via `ReadJoyDir` (`JoyPrev` holds last
+frame's direction bits) so one push = one step. No keyboard handshake
+needed — it reuses the existing `JOY1DAT`/`CIAAPRA` reads.
 
 **RNG** (`Random`): a 16-bit linear-feedback shift register — shift
 left, XOR with `$1d87` on carry. Deterministic chaos, two instructions.

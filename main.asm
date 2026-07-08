@@ -80,6 +80,12 @@ ST_PLAY		equ	1
 ST_DEATH	equ	2
 ST_OVER		equ	3
 ST_WAVE		equ	4
+ST_NAME		equ	5			; high-score name entry
+
+; high-score table entry layout
+NAMESZ		equ	8			; max name length (chars)
+ENTSZ		equ	4+NAMESZ		; BCD score long + name = 12 bytes
+CHARSETN	equ	37			; letters + digits + space (see CharSet)
 
 ;-------------------------------- macros
 WAITBLT		macro
@@ -180,6 +186,7 @@ StateTab:
 	dc.l	DeathState
 	dc.l	OverState
 	dc.l	WaveState
+	dc.l	NameState
 
 ;-------------------------------- wait for start of vertical blank
 WaitVBL:
@@ -382,7 +389,7 @@ TitleEnter:
 	move.w	#76,d1
 	bsr	DrawText
 
-	; high score table, 5 entries
+	; high score table, 5 entries: "N. SCORE NAME"
 	lea	HiTab,a2
 	moveq	#0,d6			; entry index
 .hisc	move.w	d6,d0
@@ -392,16 +399,23 @@ TitleEnter:
 	move.b	d0,(a0)+
 	move.b	#'.',(a0)+
 	move.b	#' ',(a0)+
-	move.l	(a2)+,d0
-	bsr	BCDToStr		; appends 6 digits + nul
+	move.l	(a2),d0			; BCD score (name follows at 4(a2))
+	bsr	BCDToStr		; appends 6 digits + nul, a0 -> nul
+	move.b	#' ',(a0)+		; separator, then name
+	lea	4(a2),a3
+	moveq	#NAMESZ-1,d0
+.name	move.b	(a3)+,(a0)+
+	dbf	d0,.name
+	clr.b	(a0)
 	lea	StrBuf,a0
-	moveq	#16,d0
+	moveq	#9,d0			; centred: score+name is wide
 	move.w	d6,d1
 	mulu	#12,d1
 	add.w	#92,d1
 	movem.l	d6/a2,-(sp)
 	bsr	DrawText
 	movem.l	(sp)+,d6/a2
+	lea	ENTSZ(a2),a2		; next entry
 	addq.w	#1,d6
 	cmp.w	#5,d6
 	blt.s	.hisc
@@ -943,32 +957,18 @@ DeathState:
 .wait	rts
 
 GameOverEnter:
+	bsr	HideSprites
+	move.l	Score,d0
+	bsr	HiScoreInsert		; d2 = slot (0..4) or -1
+	tst.w	d2
+	bpl	NameEnter		; made the table -> type your name
+	; ordinary game-over screen
 	move.w	#ST_OVER,GameState
 	move.w	#200,StateTimer
-	bsr	HideSprites
 	lea	TxtOver(pc),a0
 	moveq	#15,d0
 	move.w	#120,d1
 	bsr	DrawText
-	; merge score into the high-score table
-	move.l	Score,d0
-	lea	HiTab,a0
-	moveq	#0,d2			; slot index
-.find	cmp.l	(a0)+,d0
-	bhi.s	.insert
-	addq.w	#1,d2
-	cmp.w	#5,d2
-	blt.s	.find
-	rts				; not good enough, dawg
-.insert	lea	HiTab+16,a1		; shift lower entries down
-	moveq	#4,d1
-.shift	cmp.w	d2,d1
-	ble.s	.place
-	move.l	-4(a1),(a1)
-	subq.l	#4,a1
-	subq.w	#1,d1
-	bra.s	.shift
-.place	move.l	d0,(a1)
 	rts
 
 OverState:
@@ -976,6 +976,195 @@ OverState:
 	bne.s	.wait
 	bra	TitleEnter
 .wait	rts
+
+;--------------------------------------------------------------------
+; Merge d0 (BCD score) into HiTab. If it makes the top 5, shift the
+; lower entries down, drop the score into the freed slot with a blank
+; name, stash the slot's name field in NamePtr, and return the slot
+; index in d2 (0..4). Not good enough -> d2 = -1.
+; Trashes d0-d3/a0-a2.
+;--------------------------------------------------------------------
+HiScoreInsert:
+	lea	HiTab,a0
+	moveq	#0,d2			; slot index
+.find	cmp.l	(a0),d0			; new score > this entry ?
+	bhi.s	.ins
+	lea	ENTSZ(a0),a0
+	addq.w	#1,d2
+	cmp.w	#5,d2
+	blt.s	.find
+	moveq	#-1,d2			; not good enough, dawg
+	rts
+.ins	lea	HiTab+4*ENTSZ,a1	; last entry = first shift destination
+	moveq	#4,d1
+.shift	cmp.w	d2,d1
+	ble.s	.place
+	move.l	-ENTSZ(a1),(a1)		; copy a whole 12-byte entry down
+	move.l	-ENTSZ+4(a1),4(a1)
+	move.l	-ENTSZ+8(a1),8(a1)
+	lea	-ENTSZ(a1),a1
+	subq.w	#1,d1
+	bra.s	.shift
+.place	move.l	d0,(a1)			; a1 = HiTab + slot*ENTSZ
+	lea	4(a1),a2		; name field of the new entry
+	move.l	a2,NamePtr
+	moveq	#NAMESZ-1,d1
+.blank	move.b	#' ',(a2)+		; start with a blank name
+	dbf	d1,.blank
+	rts
+
+;=====================================================================
+; STATE: NAME ENTRY (player reached a high score)
+; Old-school joystick letter-picker: up/down cycle the letter under the
+; cursor, left/right move the cursor, fire commits. Name already sits in
+; the table (blank), we just edit it in place via NamePtr.
+;=====================================================================
+NameEnter:
+	move.w	#ST_NAME,GameState
+	clr.w	NamePos
+	clr.w	JoyPrev
+	st	FireLatch		; require fire release before commit
+	bsr	HideSprites
+	bsr	ClearGamePlanes
+	lea	TxtNewHi(pc),a0
+	moveq	#6,d0
+	move.w	#80,d1
+	bsr	DrawText
+	lea	TxtEnter(pc),a0
+	moveq	#6,d0
+	move.w	#104,d1
+	bsr	DrawText
+	lea	TxtNameHlp(pc),a0
+	moveq	#3,d0
+	move.w	#170,d1
+	bsr	DrawText
+	bsr	DrawNameLine
+	rts
+
+NameState:
+	bsr	ReadJoyDir		; d1 = fresh-press bits 0=up 1=dn 2=L 3=R
+	btst	#0,d1
+	beq.s	.nu
+	moveq	#1,d0
+	bsr	CycleCur		; next letter
+.nu	btst	#1,d1
+	beq.s	.nd
+	moveq	#-1,d0
+	bsr	CycleCur		; prev letter
+.nd	btst	#2,d1
+	beq.s	.nl
+	subq.w	#1,NamePos		; cursor left
+	bpl.s	.nl
+	clr.w	NamePos
+.nl	btst	#3,d1
+	beq.s	.nr
+	move.w	NamePos,d0		; cursor right
+	addq.w	#1,d0
+	cmp.w	#NAMESZ,d0
+	blt.s	.rok
+	moveq	#NAMESZ-1,d0
+.rok	move.w	d0,NamePos
+.nr	bsr	DrawNameLine
+	; fire commits (after a release)
+	btst	#7,CIAAPRA
+	bne.s	.nofire
+	tst.b	FireLatch
+	bne.s	.done
+	bra	TitleEnter		; name is already stored in the table
+.nofire	clr.b	FireLatch
+.done	rts
+
+;--------------------------------------------------------------------
+; Advance the character at NamePtr+NamePos by d0 (+1/-1) through
+; CharSet (A-Z 0-9 space). Unknown chars snap to the set. Trashes
+; d0/d2/d3/a0-a1 (NOT d1 -- NameState keeps the joy edges there).
+;--------------------------------------------------------------------
+CycleCur:
+	move.l	NamePtr,a0
+	move.w	NamePos,d3
+	lea	(a0,d3.w),a0		; a0 -> current char
+	move.b	(a0),d2
+	lea	CharSet(pc),a1
+	moveq	#0,d3			; scan for current char's index
+.scan	cmp.b	(a1,d3.w),d2
+	beq.s	.found
+	addq.w	#1,d3
+	cmp.w	#CHARSETN,d3
+	blt.s	.scan
+	moveq	#0,d3			; not in set -> index 0
+.found	add.w	d0,d3
+	bpl.s	.nounder
+	moveq	#CHARSETN-1,d3		; wrapped below -> last
+.nounder cmp.w	#CHARSETN,d3
+	blt.s	.store
+	moveq	#0,d3			; wrapped past end -> first
+.store	move.b	(a1,d3.w),(a0)
+	rts
+
+;--------------------------------------------------------------------
+; Decode JOY1DAT edges. d1 bits: 0=up 1=down 2=left 3=right, set only
+; on a fresh press this frame. JoyPrev holds last frame's raw bits.
+; FS-UAE digital joystick gives clean bit patterns (measured):
+;   UP=$0100  DOWN=$0001  LEFT=$FF00  RIGHT=$00FF
+; so up = bit8 & !bit9 (else it's left), down = bit0 & !bit1 (else
+; right), left = bit9, right = bit1. Trashes d0/d2/d3.
+;--------------------------------------------------------------------
+ReadJoyDir:
+	move.w	JOY1DAT(a5),d0
+	moveq	#0,d2			; raw direction bits this frame
+	btst	#8,d0			; up = bit8 without bit9
+	beq.s	.nu
+	btst	#9,d0
+	bne.s	.nu
+	bset	#0,d2
+.nu	btst	#0,d0			; down = bit0 without bit1
+	beq.s	.nd
+	btst	#1,d0
+	bne.s	.nd
+	bset	#1,d2
+.nd	btst	#9,d0			; left
+	beq.s	.nl
+	bset	#2,d2
+.nl	btst	#1,d0			; right
+	beq.s	.nr
+	bset	#3,d2
+.nr	move.w	d2,d1
+	move.w	JoyPrev,d3
+	not.w	d3
+	and.w	d3,d1			; keep only newly-set bits
+	move.w	d2,JoyPrev
+	rts
+
+;--------------------------------------------------------------------
+; Render the 8-char name being edited (blank-padded) plus a cursor
+; underline beneath the cell at NamePos. DrawText clears each cell's
+; bottom row, so the underline auto-erases when we redraw. Trashes
+; d0-d3/a0-a1.
+;--------------------------------------------------------------------
+NAMEBX		equ	16		; byte column of the edited name
+NAMEBY		equ	136		; pixel row
+DrawNameLine:
+	move.l	NamePtr,a1
+	lea	StrBuf,a0
+	moveq	#NAMESZ-1,d0
+.cpy	move.b	(a1)+,(a0)+
+	dbf	d0,.cpy
+	clr.b	(a0)
+	lea	StrBuf,a0
+	moveq	#NAMEBX,d0
+	move.w	#NAMEBY,d1
+	bsr	DrawText
+	lea	Plane1,a1		; underline cursor cell (cell row 7)
+	move.w	#NAMEBY,d2
+	lsl.w	#5,d2
+	move.w	#NAMEBY,d3
+	lsl.w	#3,d3
+	add.w	d3,d2			; y*40
+	add.w	#NAMEBX,d2
+	add.w	NamePos,d2
+	add.w	#280,d2			; +cell row 7 (7*40)
+	move.b	#$ff,(a1,d2.w)
+	rts
 
 ;=====================================================================
 ; UFO
@@ -1741,6 +1930,11 @@ TxtHi:		dc.b	'HI',0
 TxtPts30:	dc.b	'= 30 PTS',0
 TxtPts20:	dc.b	'= 20 PTS',0
 TxtPts10:	dc.b	'= 10 PTS',0
+TxtNewHi:	dc.b	'NEW HIGH SCORE',0
+TxtEnter:	dc.b	'ENTER YOUR NAME',0
+TxtNameHlp:	dc.b	'MOVE TO PICK LETTER  FIRE TO SAVE',0
+	even                                           
+CharSet:	dc.b	'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789 '	; CHARSETN chars
 	even
 
 RowType:
@@ -2001,8 +2195,18 @@ CellMask:
 ;=====================================================================
 	section	data,data
 ;=====================================================================
-HiTab:					; survives between games
-	dc.l	$00007500,$00004000,$00002000,$00001000,$00000500
+HiTab:					; survives between games; ENTSZ bytes/entry:
+					; BCD score long + NAMESZ name chars
+	dc.l	$00007500
+	dc.b	'STEVO   '
+	dc.l	$00004000
+	dc.b	'BOB     '
+	dc.l	$00002000
+	dc.b	'FROOMCH '
+	dc.l	$00001000
+	dc.b	'DOOPA   '
+	dc.l	$00000500
+	dc.b	'CABBAGE '
 HiScore:
 	dc.l	$00007500
 
@@ -2048,7 +2252,11 @@ AlienTab	ds.b	ROWS*COLS
 ScoreDirty	ds.b	1
 HiDirty		ds.b	1
 FireLatch	ds.b	1
-StrBuf		ds.b	16
+	even
+NamePtr		ds.l	1			; name field being edited in HiTab
+NamePos		ds.w	1			; cursor position 0..NAMESZ-1
+JoyPrev		ds.w	1			; last frame's joystick dir bits
+StrBuf		ds.b	24
 
 ;=====================================================================
 	section	chipbss,bss_c
