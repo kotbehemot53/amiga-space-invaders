@@ -73,9 +73,10 @@ StateTab:
 	dc.l	DeathState
 	dc.l	OverState
 	dc.l	WaveState
+	dc.l	NameState		; high-score name entry
 ```
 
-`dc.l` = "declare constant, long". Five 32-bit routine addresses laid
+`dc.l` = "declare constant, long". Six 32-bit routine addresses laid
 out back to back — a `switch` statement's jump table, built by hand.
 The linker patches the real addresses at load time (these are
 relocations; an Amiga executable can load anywhere in RAM).

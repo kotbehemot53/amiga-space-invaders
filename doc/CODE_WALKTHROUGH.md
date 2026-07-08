@@ -16,6 +16,7 @@ readings of the crucial routines**, see the deep dives:
 | [dive-aliens.md](dive-aliens.md) | `DrawAliens` | wipe-and-redraw strategy, extent tracking, table-driven gfx selection |
 | [dive-bullet.md](dive-bullet.md) | `MoveBullet`, `AddScore`, `BCDToStr` | three collision styles, BCD scoring with `abcd`, the register-clobber bug |
 | [dive-audio.md](dive-audio.md) | `PlaySound`, `UpdateAudio`, `PlayMarch` | Paula programming, one-shot scheduling, live pitch bends, tail calls |
+| [dive-hiscore.md](dive-hiscore.md) | `HiScoreInsert`, `NameEnter`/`NameState`, `ReadJoyDir`, `CycleCur` | sorted-array insert, joystick-as-keyboard text entry, edge-triggered input, another clobber bug |
 
 ---
 
