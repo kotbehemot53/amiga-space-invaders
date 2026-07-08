@@ -88,6 +88,11 @@ wblt\@	btst	#6,DMACONR(a5)
 	bne.s	wblt\@
 	endm
 
+MUL4		macro			; \1 *= 4 (two add.w beat lsl.w #2 on 68000)
+	add.w	\1,\1
+	add.w	\1,\1
+	endm
+
 ;=====================================================================
 	section	code,code
 ;=====================================================================
@@ -136,8 +141,7 @@ MainLoop:
 	bsr	TwinkleStars
 
 	move.w	GameState,d0
-	add.w	d0,d0
-	add.w	d0,d0
+	MUL4	d0
 	lea	StateTab(pc),a0
 	move.l	(a0,d0.w),a0
 	jsr	(a0)
@@ -513,8 +517,7 @@ MoveFormation:
 	blt.s	.redraw
 	bra	GameOverEnter
 .horiz	move.w	FormDir,d0
-	add.w	d0,d0
-	add.w	d0,d0			; 4px steps
+	MUL4	d0			; 4px steps
 	add.w	d0,FormX
 	; edge check using live-alien extents from last draw
 	tst.w	FormDir
@@ -589,8 +592,7 @@ DrawAliens:
 	ext.w	d2
 	lsl.w	#3,d2			; type*8
 	move.w	AnimFrame,d3
-	add.w	d3,d3
-	add.w	d3,d3			; frame*4
+	MUL4	d3			; frame*4
 	add.w	d3,d2
 	lea	AlienGfxTab(pc),a0
 	move.l	(a0,d2.w),a0
@@ -666,8 +668,7 @@ MoveBullet:
 	bsr	SfxUfoHit
 	bsr	Random
 	and.w	#3,d0
-	add.w	d0,d0
-	add.w	d0,d0
+	MUL4	d0
 	lea	UfoPts(pc),a0
 	move.l	(a0,d0.w),d0
 	bsr	AddScore
@@ -715,8 +716,7 @@ MoveBullet:
 	; score by row
 	lea	RowPts(pc),a0
 	move.w	d4,d0
-	add.w	d0,d0
-	add.w	d0,d0
+	MUL4	d0
 	move.l	(a0,d0.w),d0
 	bsr	AddScore
 	bsr	SfxExplode		; last: PlaySound eats d0-d4

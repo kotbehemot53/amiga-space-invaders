@@ -161,8 +161,7 @@ addresses — assembly's switch statement:
 
 ```asm
         move.w  GameState,d0
-        add.w   d0,d0
-        add.w   d0,d0             ; index * 4 (pointers are 4 bytes)
+        MUL4    d0                ; index * 4 (pointers are 4 bytes)
         lea     StateTab(pc),a0
         move.l  (a0,d0.w),a0
         jsr     (a0)

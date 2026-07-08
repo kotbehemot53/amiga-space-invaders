@@ -125,8 +125,7 @@ DrawAliens:
 	ext.w	d2
 	lsl.w	#3,d2			; type*8
 	move.w	AnimFrame,d3
-	add.w	d3,d3
-	add.w	d3,d3			; frame*4
+	MUL4	d3			; frame*4
 	add.w	d3,d2
 	lea	AlienGfxTab(pc),a0
 	move.l	(a0,d2.w),a0
