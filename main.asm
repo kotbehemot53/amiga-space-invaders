@@ -748,7 +748,7 @@ MoveBullet:
 	sub.w	FormX,d3
 	blt	.noalien
 	cmp.w	#COLS*CELLW,d3
-	bge.s	.noalien
+	bge	.noalien
 	move.w	d1,d4
 	sub.w	d2,d4
 	lsr.w	#4,d4			; row
@@ -762,6 +762,7 @@ MoveBullet:
 	; kill it
 	clr.b	(a0,d2.w)
 	subq.w	#1,AlienCnt
+	; clr.w	AlienCnt		; DEBUG: uncomment -> one hit clears the wave
 	clr.w	BulAct
 	bsr	SetMoveDelay		; only d0/d1 harmed, col/row live
 	; explosion gfx into the cell
