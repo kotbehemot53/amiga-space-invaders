@@ -9,6 +9,7 @@ readings of the crucial routines**, see the deep dives:
 
 | Deep dive | Covers | Teaches |
 |---|---|---|
+| [dive-startup.md](dive-startup.md) | `Start`, `Quit`, `QuitNoGfx` | hardware takeover/restore, Exec library calls, register ABI, `gb_copinit` copper restore, `OpenLibrary`/`CloseLibrary` refcount |
 | [dive-mainloop.md](dive-mainloop.md) | `MainLoop`, `WaitVBL`, `StateTab` | beam-synced timing, jump tables, CIA polling |
 | [dive-copper.md](dive-copper.md) | `BuildCopper` | copper lists, WAIT/MOVE encoding, the line-256 crossing, self-modified display programs |
 | [dive-gradient.md](dive-gradient.md) | `SetGradient`, `GradFactor`, `GradColorT`, `GradStartTab` | procedural per-wave background gradient, fixed-point channel scaling, ordered vertical dither, hue-varied colour table |
@@ -129,7 +130,10 @@ and expects to get their desktop back. The polite demo-scene protocol:
 
 On exit (`Quit`) the process runs backwards, plus one crucial line:
 `move.l 38(a1),COP1LCH(a5)` — offset 38 in GfxBase is the OS's own
-copper list; restoring it brings Workbench's display back.
+copper list; restoring it brings Workbench's display back. See
+[dive-startup.md](dive-startup.md) for the full line-by-line of the
+takeover/restore ritual, the library-call ABI, and why graphics.library
+is opened at all.
 
 ### 3.2 The heartbeat (`MainLoop` and `WaitVBL`)
 
