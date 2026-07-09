@@ -1552,6 +1552,19 @@ DrawHud:
 	moveq	#22,d0
 	moveq	#4,d1
 	bsr	DrawText
+	; WAVE:n on the right (redrawn each wave, plane1 is cleared first)
+	lea	StrBuf,a0
+	lea	TxtWave(pc),a1
+.cpw	move.b	(a1)+,(a0)+
+	bne.s	.cpw
+	subq.l	#1,a0			; back over the nul, append digits here
+	move.w	Level,d0
+	addq.w	#1,d0			; wave = Level+1
+	bsr	WaveToStr
+	lea	StrBuf,a0
+	moveq	#32,d0
+	moveq	#4,d1
+	bsr	DrawText
 	st	ScoreDirty
 	st	HiDirty
 	rts
@@ -1610,6 +1623,38 @@ BCDToStr:
 	add.b	#'0',d1
 	move.b	d1,(a0)+
 	dbf	d2,.dig
+	clr.b	(a0)
+	rts
+
+; d0.w = value (0..999), a0 = dest string (advances, nul-terminated)
+; decimal, leading zeros suppressed. Clobbers d0-d2.
+WaveToStr:
+	and.l	#$ffff,d0
+	cmp.l	#999,d0			; clamp for the fixed 3-digit field
+	bls.s	.ok
+	move.l	#999,d0
+.ok	moveq	#0,d2			; d2 = have we emitted a digit yet
+	divu	#100,d0
+	move.w	d0,d1			; hundreds
+	clr.w	d0
+	swap	d0			; d0 = remainder 0..99
+	tst.w	d1
+	beq.s	.noh
+	add.b	#'0',d1
+	move.b	d1,(a0)+
+	st	d2
+.noh	divu	#10,d0
+	move.w	d0,d1			; tens
+	clr.w	d0
+	swap	d0			; d0 = ones
+	tst.b	d2
+	bne.s	.pt
+	tst.w	d1
+	beq.s	.not
+.pt	add.b	#'0',d1
+	move.b	d1,(a0)+
+.not	add.b	#'0',d0
+	move.b	d0,(a0)+
 	clr.b	(a0)
 	rts
 
@@ -1927,6 +1972,7 @@ TxtPress:	dc.b	'PRESS FIRE TO START',0
 TxtOver:	dc.b	'GAME OVER',0
 TxtScore:	dc.b	'SCORE',0
 TxtHi:		dc.b	'HI',0
+TxtWave:	dc.b	'WAVE:',0
 TxtPts30:	dc.b	'= 30 PTS',0
 TxtPts20:	dc.b	'= 20 PTS',0
 TxtPts10:	dc.b	'= 10 PTS',0
@@ -2046,7 +2092,8 @@ Font:
 	dc.b	$7e,$06,$0c,$18,$30,$30,$30,$00	; 7
 	dc.b	$3c,$66,$66,$3c,$66,$66,$3c,$00	; 8
 	dc.b	$3c,$66,$66,$3e,$06,$66,$3c,$00	; 9
-	dcb.b	8*3,0			; 58-60
+	dc.b	$00,$18,$18,$00,$00,$18,$18,$00	; 58 :
+	dcb.b	8*2,0			; 59-60
 	dc.b	$00,$00,$7e,$00,$7e,$00,$00,$00	; 61 =
 	dcb.b	8*3,0			; 62-64
 	dc.b	$18,$3c,$66,$66,$7e,$66,$66,$00	; A

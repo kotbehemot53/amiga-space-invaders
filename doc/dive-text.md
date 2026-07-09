@@ -1,6 +1,7 @@
 # Deep dive: `DrawText`, `DrawText2x`, and the font
 
-*Source: `main.asm`, labels `DrawText`, `DrawText2x`, `NibExp`, `Font`.
+*Source: `main.asm`, labels `DrawText`, `DrawText2x`, `NibExp`, `Font`,
+plus the HUD callers `DrawHud`, `RenderScores`, `WaveToStr`.
 Called from almost every state (title, HUD, GAME OVER, name entry) to
 stamp glyphs into plane 1.*
 
@@ -150,9 +151,10 @@ The table runs contiguously from ASCII 32, so glyph *n* is at
 `Font + (n-32)*8`. Unused codes (most of 34–45, `/`, the gap after `9`,
 etc.) are filled with `dcb.b …,0` — blank glyphs — so any character in
 range renders *something* (usually blank) rather than reading past a
-short table. Coverage is space, `!`, `.`, `=`, digits `0-9`, and
-uppercase `A-Z`. That's exactly why high-score names are uppercased and
-restricted to `A-Z 0-9 space`.
+short table. Coverage is space, `!`, `.`, `:`, `=`, digits `0-9`, and
+uppercase `A-Z` (`:` is used by the HUD `WAVE:n` counter). That's
+exactly why high-score names are uppercased and restricted to
+`A-Z 0-9 space`.
 
 ## `DrawText2x` — double size via nibble doubling
 
@@ -210,6 +212,149 @@ becomes a full byte, so one 8x8 glyph paints a 16x16 block.
 So `DrawText2x` is `DrawText` with two multiplications baked in: a
 horizontal one done by table (`NibExp`) and a vertical one done by
 writing each row twice.
+
+## The HUD: `DrawText` in use
+
+Everything above is the *engine*. The in-game HUD is the clearest example
+of driving it. The top status line — `SCORE nnnnnn   HI nnnnnn   WAVE:n` —
+is split across two routines: `DrawHud` paints the static labels (and the
+wave counter) once per wave, and `RenderScores` repaints just the numbers
+when they change.
+
+### `DrawHud` — the static parts, once per wave
+
+```asm
+DrawHud:
+	lea	TxtScore(pc),a0
+	moveq	#2,d0			; byte column 2
+	moveq	#4,d1			; pixel row 4
+	bsr	DrawText
+	lea	TxtHi(pc),a0
+	moveq	#22,d0
+	moveq	#4,d1
+	bsr	DrawText
+	; WAVE:n on the right (redrawn each wave, plane1 is cleared first)
+	lea	StrBuf,a0
+	lea	TxtWave(pc),a1
+.cpw	move.b	(a1)+,(a0)+		; copy "WAVE:" into StrBuf
+	bne.s	.cpw
+	subq.l	#1,a0			; back over the nul, append digits here
+	move.w	Level,d0
+	addq.w	#1,d0			; wave = Level+1
+	bsr	WaveToStr
+	lea	StrBuf,a0
+	moveq	#32,d0			; byte column 32 (right edge)
+	moveq	#4,d1
+	bsr	DrawText
+	st	ScoreDirty
+	st	HiDirty
+	rts
+```
+
+- The whole HUD sits on **pixel row 4** (`d1=4`), the labels at fixed
+  **byte columns**: `SCORE` at 2, `HI` at 22, `WAVE:` at 32. Remember
+  `DrawText` takes x already divided by 8, so these are pixel x = 16, 176,
+  256. There's no clipping, so the layout is hand-placed to not collide:
+  `SCORE` + its 6 digits (col 8) run to col 13, `HI` + digits (col 25) run
+  to col 30, and `WAVE:` (5 chars, cols 32-36) leaves cols 37-39 for up to
+  3 wave digits — 40-byte row, everything fits with margin.
+- **The wave counter is built inline.** `Level` is a plain binary word
+  (0-based), so it can't go through `BCDToStr` like the scores. The code
+  copies the literal `"WAVE:"` into `StrBuf`, rewinds `a0` one byte to sit
+  *on* the terminating nul (so the number overwrites it), then
+  `WaveToStr` appends the decimal of `Level+1` and re-terminates. One
+  string, one `DrawText`.
+- **Why redraw the label every wave** instead of once at game start?
+  `WaveEnter` clears plane 1 wholesale (`ClearGamePlanes` blits both game
+  planes to zero) before calling `DrawHud`, so the labels are wiped each
+  wave and must be restamped. That whole-plane clear is also why the wave
+  number needs **no dirty flag or padding** — the field is blank before
+  each draw, so a shrinking string (e.g. wave 10 → a new game's wave 1)
+  can't leave a stale trailing digit behind.
+- The two `st` writes at the end set `ScoreDirty`/`HiDirty` to `$ff` so
+  the *next* `RenderScores` repaints the numbers — `DrawHud` itself only
+  drew labels.
+
+### `WaveToStr` — binary word to decimal
+
+```asm
+; d0.w = value (0..999), a0 = dest string (advances, nul-terminated)
+; decimal, leading zeros suppressed. Clobbers d0-d2.
+WaveToStr:
+	and.l	#$ffff,d0
+	cmp.l	#999,d0			; clamp for the fixed 3-digit field
+	bls.s	.ok
+	move.l	#999,d0
+.ok	moveq	#0,d2			; d2 = have we emitted a digit yet
+	divu	#100,d0
+	move.w	d0,d1			; quotient low word = hundreds
+	clr.w	d0
+	swap	d0			; d0 = remainder 0..99
+	tst.w	d1
+	beq.s	.noh			; suppress a leading-zero hundreds
+	add.b	#'0',d1
+	move.b	d1,(a0)+
+	st	d2			; a digit has now been emitted
+.noh	divu	#10,d0
+	move.w	d0,d1			; tens
+	clr.w	d0
+	swap	d0			; d0 = ones
+	tst.b	d2
+	bne.s	.pt			; already printing -> always emit tens
+	tst.w	d1
+	beq.s	.not			; else suppress a leading-zero tens
+.pt	add.b	#'0',d1
+	move.b	d1,(a0)+
+.not	add.b	#'0',d0
+	move.b	d0,(a0)+		; ones always emitted
+	clr.b	(a0)
+	rts
+```
+
+- `divu #100,d0` puts the **quotient in the low word, remainder in the
+  high word** of `d0`. So `move.w d0,d1` grabs the hundreds digit, then
+  `clr.w d0` / `swap d0` shifts the remainder down into the low word for
+  the next divide. Same trick again for tens vs ones.
+- **Leading-zero suppression** is the `d2` flag. It starts 0; a digit is
+  only skipped while `d2` is still 0 *and* the digit is 0. The moment any
+  non-zero digit prints, `d2` goes `$ff` and every following place is
+  emitted unconditionally (so wave 10 shows `10`, not `1`). The ones place
+  is always emitted, so wave 0/1 still renders a `0`/`1` rather than an
+  empty string.
+- The `#999` clamp guards the fixed 3-digit field: `divu` by 100 of a
+  value ≥ 1000 would leave a two-digit quotient in the hundreds place and
+  scribble an extra byte. Nobody clears 999 waves, but the clamp keeps the
+  output width bounded regardless.
+
+### `RenderScores` — repaint only what changed
+
+```asm
+RenderScores:
+	tst.b	ScoreDirty
+	beq.s	.nos
+	clr.b	ScoreDirty
+	lea	StrBuf,a0
+	move.l	Score,d0
+	bsr	BCDToStr		; BCD score -> ASCII
+	lea	StrBuf,a0
+	moveq	#8,d0			; byte column 8, right after "SCORE "
+	moveq	#4,d1
+	bsr	DrawText
+.nos	tst.b	HiDirty
+	beq.s	.noh
+	...				; same for HiScore at column 25
+.noh	rts
+```
+
+- `RenderScores` runs **every frame** in `PlayState`, but does nothing
+  unless a dirty flag is set. `AddScore` sets `ScoreDirty` (and `HiDirty`
+  if a new record) exactly when the number changes, so the CPU only
+  restamps 6 glyphs on the frames a score actually ticked — the rest of
+  the time it's two `tst.b`/`beq` and out.
+- The scores go through `BCDToStr` (next section); the wave counter went
+  through `WaveToStr` above. Both end as nul-terminated strings that
+  `DrawText` renders identically — the renderer neither knows nor cares
+  where the digits came from.
 
 ## Adjacent: `BCDToStr`
 
