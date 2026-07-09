@@ -93,8 +93,11 @@ when changing the routines they quote.
   pointers, palette, then per-4-lines COLOR00 gradient with a `$ffdf` wait
   crossing raster line 255. Gradient is **procedural**: each COLOR00 step =
   `GradStart` (current wave's top colour) scaled by a factor via
-  `GradColor`. Factor = max of a strong top lobe (`32-i`) and a dimmer
-  bottom glow (`i-44`, up to 19), black band between. `SetGradient` picks
+  `GradColorT`. Factor = max of a strong top lobe (`32-i`) and a dimmer
+  bottom glow (`i-44`, up to 19), black band between. Each 4-line block
+  emits **two** COLOR00 sub-lines (thresholds 8/24) so `GradColorT` rounds
+  channels up on alternating scanline pairs — ordered vertical dither that
+  hides the 4-bit banding. `SetGradient` picks
   `GradStart` from `GradStartTab[Level mod 24]` and rebuilds the list each
   wave, so every level's background differs; wave 1 = `$0007` (blue).
   Sprite pointers must be rewritten every frame (copper does it); sprite

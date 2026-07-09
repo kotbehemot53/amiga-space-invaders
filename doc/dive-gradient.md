@@ -1,6 +1,6 @@
 # Deep dive: the procedural background gradient
 
-*Source: `main.asm`, labels `SetGradient`, `GradColor`, the `.grad` loop
+*Source: `main.asm`, labels `SetGradient`, `GradColorT`, the `.grad` loop
 inside `BuildCopper`, and the `GradStartTab` table. The output is the
 per-scanline `COLOR00` (register `$0180`) run inside the copper list —
 see `dive-copper.md` for how the copper list as a whole is assembled.*
@@ -82,9 +82,11 @@ GradStartTab:				; 24 per-wave COLOR00 top colours ($0RGB)
 
 Inside `BuildCopper`, the gradient loop runs 64 times (`d4` = screen line,
 0..252 step 4; entry index `i = d4/4`). For each line it just calls two
-helpers back to back — `GradFactor` (line → factor) then `GradColor`
-(factor → colour) — and emits the resulting `COLOR00` MOVE. The
-copper-list plumbing (WAIT words, the line-256 crossing, the `BandTab`
+helpers — `GradFactor` (line → factor) then `GradColorT` (factor →
+colour) — and emits the resulting `COLOR00` MOVE. `GradColorT` is actually
+called *twice* per block with different dither thresholds, emitting two
+COLOR00 MOVEs (see Part 3), but the brightness curve below is per-block.
+The copper-list plumbing (WAIT words, the line-256 crossing, the `BandTab`
 check) is covered in `dive-copper.md`.
 
 `GradFactor` turns the entry index `i` (0..63) into a single *brightness
@@ -123,10 +125,10 @@ GradFactor:
   bottom wakes at 44), the `max` just selects whichever is active, and the
   gap 33..43 stays black — the mid-screen black band.
 
-Back in the loop, the factor in `d0` is handed straight to `GradColor`,
-and the returned colour becomes one *MOVE → COLOR00* copper instruction.
+Back in the loop, the factor in `d0` is handed to `GradColorT`, whose
+returned colour becomes a *MOVE → COLOR00* copper instruction.
 Splitting the work this way mirrors the two questions each line asks —
-*how bright?* (`GradFactor`) and *what colour is that?* (`GradColor`).
+*how bright?* (`GradFactor`) and *what colour is that?* (`GradColorT`).
 
 Factor as a function of line:
 
@@ -145,33 +147,42 @@ factor
                                         *          peaks at 19)
 ```
 
-## Part 3: applying the factor — `GradColor`
+## Part 3: applying the factor — `GradColorT`
 
 ```asm
-; in:  d0 = factor 0..32   out: d0 = scaled $0RGB colour
-; clobbers d1/d2/d3
-GradColor:
-	move.w	d0,d2			; d2 = factor
-	move.w	GradStart,d1		; d1 = $0RGB source
-	move.w	d1,d0			; blue
-	and.w	#$0f,d0
-	mulu	d2,d0
-	lsr.w	#5,d0			; * factor / 32
-	move.w	d1,d3			; green
-	lsr.w	#4,d3
-	and.w	#$0f,d3
-	mulu	d2,d3
-	lsr.w	#5,d3
-	lsl.w	#4,d3
-	or.w	d3,d0
-	move.w	d1,d3			; red
-	lsr.w	#8,d3
-	and.w	#$0f,d3
-	mulu	d2,d3
-	lsr.w	#5,d3
-	lsl.w	#8,d3
-	or.w	d3,d0
+; in:  d7 = factor 0..32   d6 = dither threshold 0..31
+; out: d0 = dithered $0RGB colour   clobbers d0/d1/d2/d5
+GradColorT:
+	move.w	GradStart,d5		; d5 = $0RGB source
+	moveq	#0,d0			; result accumulator
+	move.w	d5,d1			; blue
+	and.w	#$0f,d1
+	bsr.s	.chan
+	or.w	d1,d0
+	move.w	d5,d1			; green
+	lsr.w	#4,d1
+	and.w	#$0f,d1
+	bsr.s	.chan
+	lsl.w	#4,d1
+	or.w	d1,d0
+	move.w	d5,d1			; red
+	lsr.w	#8,d1
+	and.w	#$0f,d1
+	bsr.s	.chan
+	lsl.w	#8,d1
+	or.w	d1,d0
 	rts
+.chan	mulu	d7,d1			; factor*ch, 0..480
+	move.w	d1,d2
+	and.w	#$1f,d2			; discarded fraction (low 5 bits)
+	lsr.w	#5,d1			; scaled channel 0..15
+	cmp.w	d6,d2			; fraction over threshold?
+	bls.s	.cd
+	addq.w	#1,d1			; round up
+	cmp.w	#15,d1
+	bls.s	.cd
+	moveq	#15,d1			; clamp
+.cd	rts
 ```
 
 Multiply each 4-bit channel of `GradStart` by `factor/32` and reassemble.
@@ -179,19 +190,30 @@ The `/32` is the key trick: at the peak factor of 32 a channel is scaled
 by 32/32 = 1 (unchanged, full brightness), and dividing by a power of two
 is a shift, not a real divide.
 
-- `move.w d0,d2` — save the factor; `mulu` is about to reuse `d0`.
-- `move.w GradStart,d1` — the source colour, read fresh each call so a new
+**The dither.** `factor*ch` is 0..480; `lsr.w #5` (÷32) is the 4-bit
+result and the low 5 bits (`and.w #$1f`) are the *fraction* that plain
+truncation would throw away — the source of the visible banding, since the
+hardware only has 16 levels per channel. When that fraction beats the
+caller's `d6` threshold the channel is rounded **up** by one (clamped to
+15). `BuildCopper`'s gradient loop calls `GradColorT` twice per 4-line
+block — first with a low threshold (8), then a high one (24) two rasters
+lower — so a channel whose fraction lands between the two thresholds is
+one level brighter on the lower pair of scanlines than the upper pair. The
+eye averages the alternating pairs into an in-between colour: **ordered
+vertical dithering** that fakes shades between the 16 hardware levels and
+smooths the gradient. Thresholds 8/24 split each fractional unit into three
+perceived sub-levels (both floor, split, both ceil).
+
+- `move.w GradStart,d5` — the source colour, read fresh each call so a new
   wave's `GradStart` takes effect on the next rebuild.
-- **Blue** (low nibble): `and.w #$0f` isolates it, `mulu d2` multiplies by
-  the factor (max `15 * 32 = 480`, fits a word), `lsr.w #5` divides by 32
-  → back into 0..15. This first channel goes straight into `d0` as the
-  running result.
-- **Green** (bits 4..7): copy to `d3`, `lsr.w #4` to bring it down to the
-  low nibble, same isolate/multiply/shift, then `lsl.w #4` to put it back
-  in the green position and `or.w d3,d0` to merge.
+- **Blue** (low nibble): `and.w #$0f` isolates it, `.chan` multiplies by
+  the factor (max `15 * 32 = 480`, fits a word), dithers, and shifts back
+  to 0..15. This first channel `or`s straight into the `d0` result.
+- **Green** (bits 4..7): `lsr.w #4` down to the low nibble, `.chan`, then
+  `lsl.w #4` back into the green position and `or.w d1,d0` to merge.
 - **Red** (bits 8..11): same with `lsr.w #8` / `lsl.w #8`.
-- Result in `d0`: the `$0RGB` colour with every channel scaled, ready to
-  drop into the copper `COLOR00` MOVE.
+- Result in `d0`: the dithered `$0RGB` colour, ready to drop into the
+  copper `COLOR00` MOVE.
 
 Because all three channels share one factor, the colour keeps its **hue**
 and only its **brightness** changes down the screen — the gradient is a

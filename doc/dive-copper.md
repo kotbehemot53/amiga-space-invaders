@@ -173,10 +173,12 @@ makes all stars pulse.
 	move.w	#$0182,(a0)+		; COLOR01
 	move.w	(a2)+,(a0)+
 .noband
-	; COLOR00 procedural gradient step (see dive-gradient.md)
-	bsr	GradFactor		; d0 = brightness factor for this line
-	bsr	GradColor		; d0 = factor -> scaled COLOR00
-	move.w	#$0180,(a0)+		; COLOR00
+	; COLOR00 gradient step, dithered over two sub-lines (see dive-gradient.md)
+	bsr	GradFactor		; d0 = brightness factor for this block
+	move.w	d0,d7			; save factor across both sub-lines
+	moveq	#8,d6			; sub-line 0/1 dither threshold (low)
+	bsr	GradColorT		; d0 = dithered COLOR00
+	move.w	#$0180,(a0)+		; COLOR00 (lines +0,+1)
 	move.w	d0,(a0)+
 	; power-up tint slot: COLOR02 (text) + COLOR03 (text over plane 0),
 	; white by default, PupTint/PupUntint poke the values via PupColTab
@@ -185,6 +187,18 @@ makes all stars pulse.
 	move.w	#$0fff,(a0)+
 	move.w	#$0186,(a0)+
 	move.w	#$0fff,(a0)+
+	; second dither sub-line, two rasters lower, higher threshold
+	move.w	d4,d0
+	add.w	#44+2,d0		; raster line +2
+	and.w	#$ff,d0
+	lsl.w	#8,d0
+	or.w	#$07,d0
+	move.w	d0,(a0)+		; WAIT line+2,hpos 6
+	move.w	#$fffe,(a0)+
+	moveq	#24,d6			; sub-line 2/3 dither threshold (high)
+	bsr	GradColorT		; d0 = dithered COLOR00
+	move.w	#$0180,(a0)+		; COLOR00 (lines +2,+3)
+	move.w	d0,(a0)+
 	addq.w	#4,d4
 	cmp.w	#256,d4
 	blt.s	.grad
@@ -193,9 +207,11 @@ makes all stars pulse.
 	rts
 ```
 
-The loop runs 64 times, once per 4 screen lines, and each iteration
-emits: one WAIT, optionally one COLOR01 MOVE, one COLOR00 MOVE, and a
-**power-up tint slot** (one COLOR02 MOVE + one COLOR03 MOVE).
+The loop runs 64 times, once per 4 screen lines. Each iteration emits: one
+WAIT, optionally one COLOR01 MOVE, the **power-up tint slot** (one COLOR02
+MOVE + one COLOR03 MOVE), and now **two** COLOR00 MOVEs — the second behind
+its own WAIT two rasters lower — so the 4-line block is split into two
+dithered colour bands (see `dive-gradient.md`).
 
 - `add.w #44,d0` — screen coordinates start at raster line 44 (that's
   where `DIWSTRT $2c81` put the top of the display window; `$2c` = 44).
@@ -221,11 +237,13 @@ emits: one WAIT, optionally one COLOR01 MOVE, one COLOR00 MOVE, and a
   suffices — a merge of two sorted streams. On a hit, emit
   *MOVE colour → COLOR01* ($182). This is what re-tints all plane-0
   graphics region by region (red aliens up top, green shields below).
-- Unconditionally: *MOVE computed value → COLOR00* ($180) — the vertical
+- Twice per block: *MOVE computed value → COLOR00* ($180) — the vertical
   background gradient. The value is **procedural** and **changes every
   wave**: a per-entry factor scales the wave's top colour down to black.
-  That's a feature in its own right, spanning `SetGradient`, `GradColor`
-  and `GradStartTab` — **see `dive-gradient.md`** for the full line-by-line.
+  The two MOVEs carry the two nearest 4-bit colours on alternating pairs
+  of scanlines — **ordered vertical dithering** to hide the banding. That's
+  a feature in its own right, spanning `SetGradient`, `GradColorT` and
+  `GradStartTab` — **see `dive-gradient.md`** for the full line-by-line.
 - The **power-up tint slot** is the twinkle hook's trick, scaled up to
   64 addresses: every 4-line step emits *MOVE $0fff → COLOR02* and
   *MOVE $0fff → COLOR03*, and the address of the first value word goes
