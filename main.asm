@@ -431,7 +431,7 @@ GradColorT:
 ; whose fraction f rounds up on 0/1/2/3/4 of the 4 lines as f crosses 2,10,
 ; 18,26 -> five perceived sub-levels between the 16 hardware ones. Reorder
 ; these for a different dither texture; widen the spread for stronger dither.
-DithTab	dc.w	26,10,18,2
+DithTab	dc.w	24,16,20,12
 
 ;=====================================================================
 ; STATE: TITLE
