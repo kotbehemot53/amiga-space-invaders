@@ -302,10 +302,18 @@ BuildCopper:
 	move.w	#$0182,(a0)+		; COLOR01
 	move.w	(a2)+,(a0)+
 .noband
-	; COLOR00 procedural gradient step (see doc/dive-gradient.md)
-	bsr	GradFactor		; d0 = brightness factor for this line
-	bsr	GradColor		; d0 = factor -> scaled COLOR00
-	move.w	#$0180,(a0)+		; COLOR00
+	; COLOR00 procedural gradient, ordered-dithered over the 4 rasters of
+	; this block as 1px bars (see doc/dive-gradient.md). GradFactor gives
+	; one brightness for the whole block; GradColorT rounds each channel up
+	; when its fraction beats the sub-line's threshold from DithTab (a
+	; dispersed 4-level pattern), so the 4 scanlines carry a 0/25/50/75/100%
+	; mix of the two nearest 4-bit colours -> the eye blends them.
+	bsr	GradFactor		; d0 = brightness factor for this block
+	move.w	d0,d7			; save factor across all 4 sub-lines
+	lea	DithTab(pc),a4		; 4-line dither threshold pattern
+	move.w	(a4),d6			; sub-line +0 threshold
+	bsr	GradColorT		; d0 = dithered COLOR00
+	move.w	#$0180,(a0)+		; COLOR00 (raster +0)
 	move.w	d0,(a0)+
 	; power-up tint slot: COLOR02 (text) + COLOR03 (text over plane 0),
 	; white by default, PupTint/PupUntint poke the values via PupColTab
@@ -314,9 +322,28 @@ BuildCopper:
 	move.w	#$0fff,(a0)+
 	move.w	#$0186,(a0)+
 	move.w	#$0fff,(a0)+
+	; sub-lines +1..+3: one WAIT + one dithered COLOR00 each (1px bars)
+	moveq	#1,d3			; sub-line index (GradColorT preserves d3)
+.sub	move.w	d4,d0
+	add.w	#44,d0
+	add.w	d3,d0			; raster line + sub
+	and.w	#$ff,d0
+	lsl.w	#8,d0
+	or.w	#$07,d0
+	move.w	d0,(a0)+		; WAIT raster+sub,hpos 3
+	move.w	#$fffe,(a0)+
+	move.w	d3,d0
+	add.w	d0,d0			; word index into DithTab
+	move.w	(a4,d0.w),d6		; this sub-line's threshold
+	bsr	GradColorT		; d0 = dithered COLOR00
+	move.w	#$0180,(a0)+		; COLOR00 (raster +sub)
+	move.w	d0,(a0)+
+	addq.w	#1,d3
+	cmp.w	#4,d3
+	blt.s	.sub
 	addq.w	#4,d4
 	cmp.w	#256,d4
-	blt.s	.grad
+	blt	.grad
 
 	move.l	#$fffffffe,(a0)+	; end of copper list
 	rts
@@ -356,32 +383,55 @@ GradFactor:
 .nobot	move.w	d1,d0
 .done	rts
 
-;-------------------------------- scale GradStart by a brightness factor
-; Multiplies each 4-bit R/G/B channel of GradStart by d0/32.
-;   in:  d0 = factor 0..32   out: d0 = scaled $0RGB colour
-;   clobbers d1/d2/d3
-GradColor:
-	move.w	d0,d2			; d2 = factor
-	move.w	GradStart,d1		; d1 = $0RGB source
-	move.w	d1,d0			; blue
-	and.w	#$0f,d0
-	mulu	d2,d0
-	lsr.w	#5,d0			; * factor / 32
-	move.w	d1,d3			; green
-	lsr.w	#4,d3
-	and.w	#$0f,d3
-	mulu	d2,d3
-	lsr.w	#5,d3
-	lsl.w	#4,d3
-	or.w	d3,d0
-	move.w	d1,d3			; red
-	lsr.w	#8,d3
-	and.w	#$0f,d3
-	mulu	d2,d3
-	lsr.w	#5,d3
-	lsl.w	#8,d3
-	or.w	d3,d0
+;-------------------------------- scale GradStart, with per-channel dither
+; Each 4-bit R/G/B channel of GradStart is scaled by factor/32. The exact
+; product is factor*ch (0..480); the top 5 bits (>>5) are the 4-bit result,
+; the low 5 bits are the discarded fraction. When that fraction exceeds the
+; caller's threshold the channel is rounded up by 1 (clamped to 15). Called
+; once per scanline with the 4 dispersed thresholds in DithTab, this yields
+; ordered vertical dithering that fakes colours between the 16 hardware
+; levels (1px dither bars).
+;   in:  d7 = factor 0..32   d6 = dither threshold 0..31
+;   out: d0 = dithered $0RGB colour   clobbers d0/d1/d2/d5
+GradColorT:
+	move.w	GradStart,d5		; d5 = $0RGB source
+	moveq	#0,d0			; result accumulator
+	move.w	d5,d1			; blue
+	and.w	#$0f,d1
+	bsr.s	.chan
+	or.w	d1,d0
+	move.w	d5,d1			; green
+	lsr.w	#4,d1
+	and.w	#$0f,d1
+	bsr.s	.chan
+	lsl.w	#4,d1
+	or.w	d1,d0
+	move.w	d5,d1			; red
+	lsr.w	#8,d1
+	and.w	#$0f,d1
+	bsr.s	.chan
+	lsl.w	#8,d1
+	or.w	d1,d0
 	rts
+; one channel: d1 = 0..15 in, dithered 0..15 out; clobbers d2
+.chan	mulu	d7,d1			; factor*ch, 0..480
+	move.w	d1,d2
+	and.w	#$1f,d2			; discarded fraction (low 5 bits)
+	lsr.w	#5,d1			; scaled channel 0..15
+	cmp.w	d6,d2			; fraction over threshold?
+	bls.s	.cd
+	addq.w	#1,d1			; round up
+	cmp.w	#15,d1
+	bls.s	.cd
+	moveq	#15,d1			; clamp
+.cd	rts
+
+;-------------------------------- 4-line dither threshold pattern
+; One threshold per raster in a block, dispersed (Bayer-like) so a channel
+; whose fraction f rounds up on 0/1/2/3/4 of the 4 lines as f crosses 2,10,
+; 18,26 -> five perceived sub-levels between the 16 hardware ones. Reorder
+; these for a different dither texture; widen the spread for stronger dither.
+DithTab	dc.w	24,16,20,12
 
 ;=====================================================================
 ; STATE: TITLE
