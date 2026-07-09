@@ -74,6 +74,12 @@ BULSPD		equ	4
 FORMX0		equ	24
 FORMY0		equ	48
 
+; power-ups (see PupUpdate)
+PUPFREQ		equ	600		; min frames between drops -- the tuning knob
+PUPRND		equ	511		; + random 0..PUPRND extra frames (power of 2 - 1)
+PUPSPD		equ	1		; fall speed, px/frame
+PUPCNT		equ	2		; entries in PupDefTab
+
 ; game states
 ST_TITLE	equ	0
 ST_PLAY		equ	1
@@ -275,6 +281,7 @@ BuildCopper:
 	; COLOR00 gradient is procedural: GradStart at the top fading to
 	; black over the top ~third (entries 0..32), black below.
 	lea	BandTab(pc),a2
+	lea	PupColTab,a3		; power-up tint slot pointer table
 	moveq	#0,d4			; screen line 0..252 step 4
 .grad	move.w	d4,d0
 	add.w	#44,d0			; raster line
@@ -300,6 +307,13 @@ BuildCopper:
 	bsr	GradColor		; d0 = factor -> scaled COLOR00
 	move.w	#$0180,(a0)+		; COLOR00
 	move.w	d0,(a0)+
+	; power-up tint slot: COLOR02 (text) + COLOR03 (text over plane 0),
+	; white by default, PupTint/PupUntint poke the values via PupColTab
+	move.w	#$0184,(a0)+
+	move.l	a0,(a3)+
+	move.w	#$0fff,(a0)+
+	move.w	#$0186,(a0)+
+	move.w	#$0fff,(a0)+
 	addq.w	#4,d4
 	cmp.w	#256,d4
 	blt.s	.grad
@@ -489,6 +503,7 @@ PlayEnter:
 	st	ScoreDirty
 	move.w	#3,Lives
 	clr.w	Level
+	bsr	ResetPowers
 	; fall through
 WaveEnter:
 	move.w	#ST_WAVE,GameState
@@ -527,6 +542,8 @@ WaveEnter:
 	move.w	#60,BombCd
 	clr.w	UfoAct
 	move.w	#500,UfoCd
+	clr.w	PupAct
+	move.w	#PUPFREQ,PupCd
 
 	move.w	#152,PlayerX
 	bsr	DrawShields
@@ -556,6 +573,7 @@ PlayState:
 	bne.s	.bail
 	bsr	DropBombs
 	bsr	UfoLogic
+	bsr	PupUpdate		; power-up drop / fall / catch
 	bsr	DrawShots
 	bsr	RenderScores
 .bail	rts
@@ -694,13 +712,15 @@ PlayerControl:
 	move.w	JOY1DAT(a5),d0
 	btst	#9,d0			; left
 	beq.s	.noleft
-	subq.w	#2,PlayerX
+	move.w	PlayerSpd,d1		; px/frame, boosted by MOVEMENT+
+	sub.w	d1,PlayerX
 	cmp.w	#8,PlayerX
 	bge.s	.noleft
 	move.w	#8,PlayerX
 .noleft	btst	#1,d0			; right
 	beq.s	.norght
-	addq.w	#2,PlayerX
+	move.w	PlayerSpd,d1
+	add.w	d1,PlayerX
 	cmp.w	#296,PlayerX
 	ble.s	.norght
 	move.w	#296,PlayerX
@@ -725,7 +745,7 @@ MoveBullet:
 	tst.w	BulAct
 	beq	.done
 	move.w	BulY,d1
-	sub.w	#BULSPD,d1
+	sub.w	BulSpd,d1		; px/frame, boosted by SHOT+
 	cmp.w	#16,d1
 	bgt.s	.fly
 	clr.w	BulAct			; off the top
@@ -952,12 +972,14 @@ DeathState:
 	tst.w	Lives
 	ble	GameOverEnter
 	move.w	#152,PlayerX
+	bsr	ResetPowers		; power-ups last until a life is lost
 	bsr	UpdatePlayerSpr
 	move.w	#ST_PLAY,GameState
 .wait	rts
 
 GameOverEnter:
 	bsr	HideSprites
+	bsr	PupKill			; drop any falling power-up + its tint
 	move.l	Score,d0
 	bsr	HiScoreInsert		; d2 = slot (0..4) or -1
 	tst.w	d2
@@ -1200,6 +1222,212 @@ UfoLogic:
 	bsr	HideUfoSpr
 	bra	SfxUfoStop
 .done	rts
+
+;=====================================================================
+; POWER-UPS
+; Routine-based and expandable: PupDefTab pairs a falling text with an
+; apply routine -- adding a power-up is one table row + one routine
+; (plus its reset in ResetPowers). Every PUPFREQ..PUPFREQ+PUPRND frames
+; a power-up drops from the lowest live alien in a random column and
+; falls PUPSPD px/frame as text drawn into plane 1 (nothing else lives
+; there below the HUD, so the blitter erase can't damage aliens or
+; shields). Colour comes from CPU-poked COLOR02/COLOR03 copper slots
+; (one per 4 lines, built by BuildCopper, addresses in PupColTab): the
+; three slots under the text get the BandTab colour for its current y,
+; so it cycles through the same bands the plane-0 bullets do while the
+; HUD stays white. Catching it with the cannon applies the effect until
+; a life is lost (ResetPowers).
+;=====================================================================
+PupUpdate:
+	tst.w	PupAct
+	bne	.fall
+	; --- inactive: count down, then try to spawn
+	subq.w	#1,PupCd
+	bgt	.done
+	move.w	#30,PupCd		; quick retry unless we spawn below
+	bsr	Random
+	and.w	#15,d0
+	cmp.w	#COLS,d0
+	bge	.done
+	move.w	d0,d2			; col
+	moveq	#ROWS-1,d3		; lowest live alien in that column
+.rows	move.w	d3,d1
+	mulu	#COLS,d1
+	add.w	d2,d1
+	lea	AlienTab,a1
+	tst.b	(a1,d1.w)
+	bne.s	.gotrow
+	dbf	d3,.rows
+	bra	.done
+.gotrow
+	; pick a power-up type
+.pick	bsr	Random
+	and.w	#3,d0
+	cmp.w	#PUPCNT,d0
+	bge.s	.pick
+	lsl.w	#3,d0			; *8: text.l + routine.l per entry
+	lea	PupDefTab(pc),a0
+	move.l	(a0,d0.w),PupTxt
+	move.l	4(a0,d0.w),PupFunc
+	; text length in chars -> d1
+	move.l	PupTxt,a0
+	moveq	#0,d1
+.len	tst.b	(a0)+
+	beq.s	.lend
+	addq.w	#1,d1
+	bra.s	.len
+.lend	move.w	d1,d0			; erase width in words for the blitter
+	addq.w	#1,d0
+	lsr.w	#1,d0
+	move.w	d0,PupWW
+	; byte x: centre the text on the alien, keep it even + on-screen
+	move.w	d2,d0
+	lsl.w	#4,d0
+	add.w	FormX,d0
+	addq.w	#8,d0			; alien centre in px
+	lsl.w	#2,d1			; half text width in px (len*4)
+	sub.w	d1,d0
+	bge.s	.xpos
+	moveq	#0,d0
+.xpos	asr.w	#3,d0			; px -> byte column
+	and.w	#$fffe,d0		; even, blitter dest must be word-aligned
+	move.w	PupWW,d1
+	add.w	d1,d1
+	move.w	#40,d4
+	sub.w	d1,d4			; rightmost legal byte x
+	cmp.w	d4,d0
+	ble.s	.xok
+	move.w	d4,d0
+.xok	move.w	d0,PupBX
+	; y just under the alien
+	move.w	d3,d0
+	lsl.w	#4,d0
+	add.w	FormY,d0
+	add.w	#12,d0
+	move.w	d0,PupY
+	lsr.w	#2,d0
+	move.w	d0,PupSlot
+	move.w	#1,PupAct
+	bsr	Random			; schedule the next drop
+	and.w	#PUPRND,d0
+	add.w	#PUPFREQ,d0
+	move.w	d0,PupCd
+	bra	.draw
+
+.fall	; --- active: erase at the old position (plane 1)
+	move.w	PupBX,d0
+	move.w	PupY,d1
+	move.w	PupWW,d2
+	moveq	#8,d3
+	lea	Plane1,a1
+	bsr	ClearRectB
+	addq.w	#PUPSPD,PupY
+	cmp.w	#GROUNDY-8,PupY		; reached the ground: gone
+	bge	.expire
+	cmp.w	#PLAYERY-8,PupY		; low enough to catch?
+	blt	.draw
+	move.w	PupBX,d0		; x overlap with the cannon?
+	lsl.w	#3,d0			; text left edge px
+	move.w	PlayerX,d1
+	add.w	#16,d1
+	cmp.w	d0,d1
+	ble	.draw
+	move.w	PupWW,d2
+	lsl.w	#4,d2
+	add.w	d2,d0			; text right edge px
+	cmp.w	PlayerX,d0
+	ble	.draw
+	; caught: apply the effect
+	bsr	PupUntint
+	clr.w	PupAct
+	move.l	PupFunc,a0
+	jsr	(a0)
+	bra	SfxPowerup		; last: PlaySound eats d0-d4
+.expire	bsr	PupUntint
+	clr.w	PupAct
+	rts
+.draw	bsr	PupUntint		; old slots back to white...
+	bsr	PupTint			; ...new slots to the band colour
+	move.l	PupTxt,a0
+	move.w	PupBX,d0
+	move.w	PupY,d1
+	bsr	DrawText
+.done	rts
+
+;--- cancel a falling power-up: erase the text, restore the tint slots
+PupKill:
+	tst.w	PupAct
+	beq.s	.done
+	clr.w	PupAct
+	bsr.s	PupUntint
+	move.w	PupBX,d0
+	move.w	PupY,d1
+	move.w	PupWW,d2
+	moveq	#8,d3
+	lea	Plane1,a1
+	bra	ClearRectB
+.done	rts
+
+;--- retint the 3 copper slots under the text with its band colour
+PupTint:
+	move.w	PupY,d0
+	lsr.w	#2,d0
+	move.w	d0,PupSlot
+	move.w	PupY,d0
+	addq.w	#4,d0			; sample the colour at text middle
+	bsr	PupBandCol
+	bra.s	PupWrCols
+;--- restore the slots at PupSlot to white
+PupUntint:
+	move.w	#$0fff,d0
+;--- write colour d0 into the 3 slots from PupSlot down (d1/d2/a0/a1)
+PupWrCols:
+	move.w	PupSlot,d1
+	add.w	d1,d1
+	add.w	d1,d1			; slot index -> long offset
+	lea	PupColTab,a0
+	adda.w	d1,a0
+	moveq	#3-1,d2
+.s	move.l	(a0)+,a1
+	move.w	d0,(a1)			; COLOR02 value in CopBuf
+	move.w	d0,4(a1)		; COLOR03 value right behind it
+	dbf	d2,.s
+	rts
+
+;--- BandTab colour for screen line d0 (the tint bullets get there)
+; out: d0 = $0RGB   clobbers d1/d2/a0
+PupBandCol:
+	lea	BandTab(pc),a0
+	move.w	#$0fff,d1
+.w	move.w	(a0)+,d2
+	cmp.w	d0,d2			; entry starts below our line? done
+	bgt.s	.done			; ($7fff terminator always exits)
+	move.w	(a0),d1
+	addq.l	#2,a0
+	bra.s	.w
+.done	move.w	d1,d0
+	rts
+
+;--- back to stock cannon (new game / life lost)
+ResetPowers:
+	move.w	#2,PlayerSpd
+	move.w	#BULSPD,BulSpd
+	rts
+
+;--- apply routines: permanent until ResetPowers
+PupApplyMove:				; MOVEMENT+ : faster cannon
+	addq.w	#1,PlayerSpd
+	cmp.w	#4,PlayerSpd		; cap: stays controllable
+	ble.s	.ok
+	move.w	#4,PlayerSpd
+.ok	rts
+
+PupApplyShot:				; SHOT+ : faster bullet
+	addq.w	#2,BulSpd
+	cmp.w	#8,BulSpd		; cap: > 8 px/frame could skip the
+	ble.s	.ok			; 16px shield band collision test
+	move.w	#8,BulSpd
+.ok	rts
 
 ;=====================================================================
 ; SPRITES
@@ -1936,6 +2164,15 @@ SfxDeath:
 	move.w	#30,d4
 	bra	PlaySound
 
+SfxPowerup:				; bright blip when the cannon grabs one
+	moveq	#2,d0
+	lea	SqBuf,a0
+	moveq	#16,d1
+	move.w	#180,d2
+	move.w	#48,d3
+	moveq	#10,d4
+	bra	PlaySound
+
 SfxUfoStart:
 	moveq	#3,d0
 	lea	SqBuf,a0
@@ -1979,7 +2216,9 @@ TxtPts10:	dc.b	'= 10 PTS',0
 TxtNewHi:	dc.b	'NEW HIGH SCORE',0
 TxtEnter:	dc.b	'ENTER YOUR NAME',0
 TxtNameHlp:	dc.b	'MOVE TO PICK LETTER  FIRE TO SAVE',0
-	even                                           
+TxtPupMove:	dc.b	'M+',0
+TxtPupShot:	dc.b	'S+',0
+	even
 CharSet:	dc.b	'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789 '	; CHARSETN chars
 	even
 
@@ -1991,6 +2230,10 @@ AlienGfxTab:
 	dc.l	SquidA,SquidB
 	dc.l	CrabA,CrabB
 	dc.l	OctoA,OctoB
+
+PupDefTab:				; power-up defs: falling text + apply routine
+	dc.l	TxtPupMove,PupApplyMove
+	dc.l	TxtPupShot,PupApplyShot
 
 RowPts:					; BCD points per row
 	dc.l	$30,$20,$20,$10,$10
@@ -2079,7 +2322,9 @@ ShieldGfx:				; 24x16, CPU drawn
 Font:
 	dcb.b	8,0			; 32 space
 	dc.b	$18,$18,$18,$18,$18,$00,$18,$00	; 33 !
-	dcb.b	8*12,0			; 34-45
+	dcb.b	8*9,0			; 34-42
+	dc.b	$00,$18,$18,$7e,$18,$18,$00,$00	; 43 +
+	dcb.b	8*2,0			; 44-45
 	dc.b	$00,$00,$00,$00,$00,$18,$18,$00	; 46 .
 	dcb.b	8,0			; 47 /
 	dc.b	$3c,$66,$6e,$76,$66,$66,$3c,$00	; 0
@@ -2290,6 +2535,14 @@ BulY		ds.w	1
 BombTab		ds.w	9
 BombCd		ds.w	1
 PlayerX		ds.w	1
+PlayerSpd	ds.w	1		; cannon px/frame (MOVEMENT+ boosts)
+BulSpd		ds.w	1		; bullet px/frame (SHOT+ boosts)
+PupAct		ds.w	1		; power-up falling?
+PupCd		ds.w	1		; frames until next drop attempt
+PupBX		ds.w	1		; text byte x (even)
+PupY		ds.w	1		; text top y
+PupWW		ds.w	1		; erase width in words
+PupSlot		ds.w	1		; first tinted gradient slot
 UfoAct		ds.w	1
 UfoX		ds.w	1
 UfoDir		ds.w	1
@@ -2301,6 +2554,9 @@ HiDirty		ds.b	1
 FireLatch	ds.b	1
 	even
 NamePtr		ds.l	1			; name field being edited in HiTab
+PupTxt		ds.l	1			; falling text of the active power-up
+PupFunc		ds.l	1			; its apply routine
+PupColTab	ds.l	64			; -> COLOR02 slot values inside CopBuf
 NamePos		ds.w	1			; cursor position 0..NAMESZ-1
 JoyPrev		ds.w	1			; last frame's joystick dir bits
 StrBuf		ds.b	24
