@@ -400,7 +400,7 @@ TitleEnter:
 
 	lea	TxtHiHdr(pc),a0
 	moveq	#15,d0
-	move.w	#76,d1
+	move.w	#68,d1
 	bsr	DrawText
 
 	; high score table, 5 entries: "N. SCORE NAME"
@@ -425,7 +425,7 @@ TitleEnter:
 	moveq	#9,d0			; centred: score+name is wide
 	move.w	d6,d1
 	mulu	#12,d1
-	add.w	#92,d1
+	add.w	#84,d1
 	movem.l	d6/a2,-(sp)
 	bsr	DrawText
 	movem.l	(sp)+,d6/a2
@@ -437,27 +437,45 @@ TitleEnter:
 	; point value legend with alien graphics
 	lea	SquidA,a0
 	move.w	#120,d0
-	move.w	#164,d1
+	move.w	#152,d1
 	bsr	BlitObj16
 	lea	TxtPts30(pc),a0
 	moveq	#18,d0
-	move.w	#168,d1
+	move.w	#156,d1
 	bsr	DrawText
 	lea	CrabA,a0
 	move.w	#120,d0
-	move.w	#180,d1
+	move.w	#168,d1
 	bsr	BlitObj16
 	lea	TxtPts20(pc),a0
 	moveq	#18,d0
-	move.w	#184,d1
+	move.w	#172,d1
 	bsr	DrawText
 	lea	OctoA,a0
 	move.w	#120,d0
-	move.w	#196,d1
+	move.w	#184,d1
 	bsr	BlitObj16
 	lea	TxtPts10(pc),a0
 	moveq	#18,d0
-	move.w	#200,d1
+	move.w	#188,d1
+	bsr	DrawText
+
+	; power-up legend: M+/S+ in plane 0 (band tint), descriptions white
+	lea	TxtPupMove(pc),a0
+	moveq	#4,d0
+	move.w	#210,d1
+	bsr	DrawTextP0
+	lea	TxtPupHelpM(pc),a0
+	moveq	#7,d0
+	move.w	#210,d1
+	bsr	DrawText
+	lea	TxtPupShot(pc),a0
+	moveq	#21,d0
+	move.w	#210,d1
+	bsr	DrawTextP0
+	lea	TxtPupHelpS(pc),a0
+	moveq	#24,d0
+	move.w	#210,d1
 	bsr	DrawText
 	rts
 
@@ -1892,8 +1910,14 @@ WaveToStr:
 ; a0=nul-terminated string, d0=byte x (x/8), d1=y
 DrawText:
 	movem.l	d2-d3/a1-a3,-(sp)
-	WAITBLT
 	lea	Plane1,a1
+	bra.s	DrawTextGo
+; same, into plane 0: text gets the BandTab tint like game objects
+DrawTextP0:
+	movem.l	d2-d3/a1-a3,-(sp)
+	lea	Plane0,a1
+DrawTextGo:
+	WAITBLT
 	move.w	d1,d2
 	lsl.w	#5,d2
 	move.w	d1,d3
@@ -2218,6 +2242,8 @@ TxtEnter:	dc.b	'ENTER YOUR NAME',0
 TxtNameHlp:	dc.b	'MOVE TO PICK LETTER  FIRE TO SAVE',0
 TxtPupMove:	dc.b	'M+',0
 TxtPupShot:	dc.b	'S+',0
+TxtPupHelpM:	dc.b	'FASTER MOVE',0
+TxtPupHelpS:	dc.b	'FASTER SHOT',0
 	even
 CharSet:	dc.b	'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789 '	; CHARSETN chars
 	even
