@@ -90,14 +90,17 @@ when changing the routines they quote.
 - **Plane 1** = text/HUD only. **Plane 2** = starfield (COLOR04 twinkled by
   CPU poking a word inside `CopBuf` via `TwinkPtr`).
 - Copper list built at runtime by `BuildCopper` into `CopBuf`: bpl+sprite
-  pointers, palette, then per-4-lines COLOR00 gradient with a `$ffdf` wait
-  crossing raster line 255. Gradient is **procedural**: each COLOR00 step =
-  `GradStart` (current wave's top colour) scaled by a factor via
+  pointers, palette, then a per-scanline COLOR00 gradient with a `$ffdf`
+  wait crossing raster line 255. Gradient is **procedural**: each COLOR00
+  step = `GradStart` (current wave's top colour) scaled by a factor via
   `GradColorT`. Factor = max of a strong top lobe (`32-i`) and a dimmer
-  bottom glow (`i-44`, up to 19), black band between. Each 4-line block
-  emits **two** COLOR00 sub-lines (thresholds 8/24) so `GradColorT` rounds
-  channels up on alternating scanline pairs — ordered vertical dither that
-  hides the 4-bit banding. `SetGradient` picks
+  bottom glow (`i-44`, up to 19), black band between, computed once per
+  4-line block. Each block emits **four** COLOR00 sub-lines (1px bars), one
+  per raster, each dithered with its own threshold from `DithTab`
+  (`26,10,18,2`) so `GradColorT` rounds channels up on 0..4 of the lines —
+  5-level ordered vertical dither hiding the 4-bit banding. Tune via
+  `DithTab` (spread = which fractions dither; distinct count = levels; order
+  = texture/flicker); recipes in `doc/dive-gradient.md`. `SetGradient` picks
   `GradStart` from `GradStartTab[Level mod 24]` and rebuilds the list each
   wave, so every level's background differs; wave 1 = `$0007` (blue).
   Sprite pointers must be rewritten every frame (copper does it); sprite

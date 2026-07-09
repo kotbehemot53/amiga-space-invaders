@@ -80,14 +80,15 @@ GradStartTab:				; 24 per-wave COLOR00 top colours ($0RGB)
 
 ## Part 2: the brightness curve — `GradFactor`
 
-Inside `BuildCopper`, the gradient loop runs 64 times (`d4` = screen line,
-0..252 step 4; entry index `i = d4/4`). For each line it just calls two
+Inside `BuildCopper`, the gradient loop runs 64 times (`d4` = block line,
+0..252 step 4; entry index `i = d4/4`). For each block it calls two
 helpers — `GradFactor` (line → factor) then `GradColorT` (factor →
-colour) — and emits the resulting `COLOR00` MOVE. `GradColorT` is actually
-called *twice* per block with different dither thresholds, emitting two
-COLOR00 MOVEs (see Part 3), but the brightness curve below is per-block.
-The copper-list plumbing (WAIT words, the line-256 crossing, the `BandTab`
-check) is covered in `dive-copper.md`.
+colour). `GradFactor` runs once per block (one brightness for the block's
+4 rasters), but `GradColorT` is called *four* times, once per raster, each
+with its own dither threshold from `DithTab`, emitting four `COLOR00` MOVEs
+behind four WAITs — one per scanline, so the dither bars are **1px** tall
+(see Part 3). The copper-list plumbing (WAIT words, the line-256 crossing,
+the `BandTab` check) is covered in `dive-copper.md`.
 
 `GradFactor` turns the entry index `i` (0..63) into a single *brightness
 factor* (0..32). The factor is the **maximum of two triangular lobes**:
@@ -195,14 +196,17 @@ result and the low 5 bits (`and.w #$1f`) are the *fraction* that plain
 truncation would throw away — the source of the visible banding, since the
 hardware only has 16 levels per channel. When that fraction beats the
 caller's `d6` threshold the channel is rounded **up** by one (clamped to
-15). `BuildCopper`'s gradient loop calls `GradColorT` twice per 4-line
-block — first with a low threshold (8), then a high one (24) two rasters
-lower — so a channel whose fraction lands between the two thresholds is
-one level brighter on the lower pair of scanlines than the upper pair. The
-eye averages the alternating pairs into an in-between colour: **ordered
-vertical dithering** that fakes shades between the 16 hardware levels and
-smooths the gradient. Thresholds 8/24 split each fractional unit into three
-perceived sub-levels (both floor, split, both ceil).
+15). `BuildCopper`'s gradient loop calls `GradColorT` once per raster,
+feeding the four thresholds of `DithTab` (`26,10,18,2`) to the block's four
+scanlines. A channel whose fraction is `f` therefore rounds up on however
+many of those four thresholds `f` exceeds — 0, 1, 2, 3, or 4 of the lines —
+as `f` climbs past 2, 10, 18, 26. The eye averages the 1px lines into an
+in-between colour: **ordered vertical dithering** that fakes shades between
+the 16 hardware levels. Four dispersed thresholds give **five** perceived
+sub-levels per fractional unit (0/25/50/75/100 % of the way to the next
+level), a smoother ramp than a single split, and the dispersed order
+scatters the round-ups so the texture reads as fine dither, not a
+sub-gradient. See *Tuning the dither* below for how to change it.
 
 - `move.w GradStart,d5` — the source colour, read fresh each call so a new
   wave's `GradStart` takes effect on the next rebuild.
@@ -220,10 +224,50 @@ and only its **brightness** changes down the screen — the gradient is a
 single tint fading to black, which is why one stored top colour per wave
 is enough.
 
+## Tuning the dither
+
+The entire dither surface is one table, `DithTab dc.w 26,10,18,2` (in the
+code section right after `GradColorT`) — four thresholds, one per raster in
+each 4-line block. `GradColorT` rounds a channel up when its fraction
+(0..31) is **greater than** the line's threshold, so a **low** threshold
+leans that line bright (ceil), a **high** one leans it dark (floor). Three
+independent axes:
+
+1. **Spread (min…max) — which fractions dither vs stay solid.** A fraction
+   ≤ `min(tab)` rounds up on no line (solid floor); a fraction > `max(tab)`
+   rounds up on every line (solid ceil); in between it dithers. `2…26`
+   dithers fractions 3–26 and keeps the extremes clean. Widen the spread to
+   dither more of the ramp (less banding, more shimmer); narrow it to dither
+   only the mid-tones (cleaner, more visible steps).
+2. **Count of distinct values — number of blend levels.** Four distinct
+   thresholds → five levels (0/25/50/75/100 %). Two distinct → three levels,
+   a coarser look closer to 2px bars but still 1px tall.
+3. **Order — dither texture / flicker.** *Dispersed* (big jumps between
+   neighbours, like `26,10,18,2`) scatters the round-ups → smoothest, least
+   flicker. *Sorted* (`26,18,10,2`) clusters them at one end of the block →
+   reads like a tiny sub-gradient and can shimmer. *Paired* (`24,24,8,8`)
+   collapses back toward 2px bars — the anti-flicker option for LCD/emulator
+   where 1px alternation twinkles (a real CRT blends it smooth).
+
+Recipes (all values must stay **0–31**; rebuild after each change):
+
+| Want | `DithTab` |
+|------|-----------|
+| Current (balanced 5-level) | `26,10,18,2` |
+| Max smooth / min banding | `30,10,20,0` |
+| Subtle, less shimmer | `24,16,20,12` |
+| Coarse 3-level | `24,8,24,8` |
+| Anti-flicker (2px-ish) | `24,24,8,8` |
+
+The overall brightness/fade *shape* is separate — that lives in
+`GradFactor`'s two lobes (Part 2), not the dither. The base hue per wave is
+`GradStartTab`.
+
 ## Why it's cheap
 
 The whole gradient is regenerated only when the wave changes (inside
 `SetGradient` → `BuildCopper`), not per frame. Once built, the copper
-repaints all 64 colour steps every frame at **zero CPU cost** — see the
-payoff note in `dive-copper.md`. Adding 24 backgrounds cost 24 words of
-table plus one small routine, no per-frame work at all.
+repaints all 256 colour steps (four 1px sub-lines × 64 blocks) every frame
+at **zero CPU cost** — see the payoff note in `dive-copper.md`. Adding 24
+backgrounds cost 24 words of table plus one small routine, no per-frame
+work at all.

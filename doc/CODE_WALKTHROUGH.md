@@ -211,14 +211,15 @@ It has literally two useful instructions:
 That's enough to change *any* hardware setting mid-frame, per scanline.
 Two effects in this game come from it:
 
-**The background gradient.** `BuildCopper` writes two WAIT + `MOVE
-COLOR00` pairs every 4 scanlines (64 blocks, 2 sub-lines each). The colour
-is computed on the fly by `GradColorT`: the wave's top colour `GradStart`
-scaled per channel by a brightness factor — a strong lobe fading from the
-top plus a subtle glow rising toward the bottom, black band between. The
-two sub-lines round each channel with different thresholds, so alternating
-pairs of scanlines carry the two nearest 4-bit colours — ordered vertical
-dithering that hides the banding. Each
+**The background gradient.** `BuildCopper` writes a WAIT + `MOVE COLOR00`
+pair on **every** scanline (64 blocks × 4 rasters). The colour is computed
+on the fly by `GradColorT`: the wave's top colour `GradStart` scaled per
+channel by a brightness factor — a strong lobe fading from the top plus a
+subtle glow rising toward the bottom, black band between. Each of a block's
+four scanlines rounds the channels with a different threshold (from
+`DithTab`), so the 1px lines carry the two nearest 4-bit colours in a
+dispersed pattern — ordered vertical dithering that hides the banding; see
+`dive-gradient.md` for the tuning recipes. Each
 wave `SetGradient` loads a new `GradStart` from `GradStartTab` (24
 colours, `Level mod 24`, wave 1 = the original `$0007` blue) and rebuilds
 the list, so every level looks different. Cost to the CPU per frame:
