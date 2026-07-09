@@ -13,7 +13,9 @@ reading slowly.
 
 `PlayState` calls, in order: `EraseShots` (removes bullet/bomb pixels
 from plane 0), `MoveFormation`, `PlayerControl`, **`MoveBullet`**,
-`MoveBombs`, `DropBombs`, `UfoLogic`, `DrawShots` (draws survivors).
+`MoveBombs`, `DropBombs`, `UfoLogic`, `PupUpdate` (power-up drop/fall/
+catch — plane 1, so it stays out of this plane-0 contract), `DrawShots`
+(draws survivors).
 Because the bullet is *already erased* when this routine runs, any
 path that kills it can simply clear the active flag and walk away — no
 cleanup, the pixels are already gone. And `TestPixel` (the shield
@@ -28,7 +30,7 @@ MoveBullet:
 	tst.w	BulAct
 	beq	.done
 	move.w	BulY,d1
-	sub.w	#BULSPD,d1
+	sub.w	BulSpd,d1		; px/frame, boosted by SHOT+
 	cmp.w	#16,d1
 	bgt.s	.fly
 	clr.w	BulAct			; off the top
@@ -41,7 +43,10 @@ MoveBullet:
   One live player bullet maximum, like the arcade — that limit *is*
   the game's difficulty curve (you can't spray; every shot must land
   before the next).
-- `sub.w #BULSPD,d1` — up is smaller y; speed is 4 px/frame.
+- `sub.w BulSpd,d1` — up is smaller y. Speed is a *variable* now, not
+  the `BULSPD` constant: it starts each life at `BULSPD` (4 px/frame)
+  and the SHOT+ power-up raises it (`PupApplyShot`, capped at 8 so a
+  step can never jump clean over the 16px shield band or an alien row).
 - `cmp.w #16,d1` / `bgt.s .fly` — y ≤ 16 is the HUD score line;
   reaching it means the shot missed everything. `clr.w BulAct`
   deactivates; done. Note the *new* y is only committed to memory

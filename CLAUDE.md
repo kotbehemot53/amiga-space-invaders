@@ -99,6 +99,12 @@ when changing the routines they quote.
   wave, so every level's background differs; wave 1 = `$0007` (blue).
   Sprite pointers must be rewritten every frame (copper does it); sprite
   movement = rewriting pos/ctl words in sprite data.
+- `BuildCopper` also emits a CPU-pokable COLOR02+COLOR03 pair per 4 lines
+  (value addresses in `PupColTab`): the power-up tint slots, white by
+  default. `PupTint`/`PupUntint` recolour only the 3 slots under the
+  falling power-up text, so it band-cycles like the bullets while HUD and
+  title text stay white. `DrawTextP0` = `DrawText` into plane 0 (band
+  tint); title screen uses it for the M+/S+ legend tokens.
 - Main loop is vblank-locked via `WaitVBL` (two-phase wait on VPOSR line 303,
   includes bit 8 through the `$1ff00` mask — don't simplify it away).
 
@@ -120,6 +126,14 @@ when changing the routines they quote.
 - `PlayState` re-checks `GameState` after `MoveFormation`/`MoveBullet`/
   `MoveBombs` because those can switch state mid-frame (tail calls into
   `GameOverEnter`/`WaveEnter`/`PlayerHit`).
+- Power-ups (`PupUpdate`): every `PUPFREQ`+rnd(`PUPRND`) frames a text
+  (`M+`/`S+`) drops from the lowest live alien in a random column, falls
+  `PUPSPD` px/frame **in plane 1** (blitter erase there can't damage
+  plane-0 gfx), caught by x-overlap at the player line. `PupDefTab` =
+  `{text, apply routine}` rows — a new power-up is one row + one routine
+  + its default in `ResetPowers`. Effects (`PlayerSpd` cap 4, `BulSpd`
+  cap 8 — faster would skip the 16px shield band test) persist across
+  waves, reset on life loss / new game.
 - Score/hiscores are **BCD** (`dc.l $00xxyyzz` = 6 digits): `AddScore` uses
   an `abcd` chain, `BCDToStr` renders. Points tables (`RowPts`, `UfoPts`)
   are BCD literals — `$300` means "300 points". Never compare/add as binary.

@@ -372,6 +372,28 @@ wave → `WaveEnter`; `MoveBombs` may kill the player → `PlayerHit`;
 re-checks `GameState` and bails. Without that, the rest of the frame
 would keep drawing into a screen that was just re-initialised.
 
+**Power-ups** (`PupUpdate` and friends). Every `PUPFREQ` +
+random-`PUPRND` frames (the `equ`s at the top are the tuning knobs), a
+short text (`M+`, `S+`) drops from the lowest live alien in a random
+column and falls 1 px/frame. It's drawn with `DrawText` into **plane 1**
+— below the HUD nothing else lives there, so the per-frame blitter
+erase can't chew up aliens or shields the way a plane-0 rectangle
+would. Colour: `BuildCopper` emits a CPU-pokable COLOR02/COLOR03 pair
+per 4 scanlines (addresses in `PupColTab` — the twinkle-hook trick × 64)
+and `PupTint`/`PupUntint` paint just the three slots under the text
+with its `BandTab` colour, so the falling text cycles through the same
+bands as the bullets while all other text stays white. Catching it with
+the cannon (x-overlap when the text reaches the player line) runs the
+apply routine from `PupDefTab` — a table of `{text, routine}` pairs, so
+a new power-up is one row plus one routine (plus its default in
+`ResetPowers`). Current effects: `M+` bumps `PlayerSpd` (cap 4),
+`S+` bumps `BulSpd` (cap 8 — any faster and a bullet step could clear
+the 16-px shield band between collision tests). Effects persist across
+waves and reset when a life is lost (`ResetPowers` in `DeathState` and
+`PlayEnter`). The title screen legend reuses the same falling-text
+strings, stamped into plane 0 via `DrawTextP0` so the tokens pick up
+the band tint.
+
 **Scoring is BCD.** Scores are stored as binary-coded decimal — each
 nibble is one decimal digit, `$00031240` reads directly as "031240".
 The 68000 has a dedicated instruction for it: `abcd` (add BCD with

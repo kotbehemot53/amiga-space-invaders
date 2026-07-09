@@ -17,8 +17,11 @@ Recall the display model (full detail in the walkthrough): 320x256, 3
 bitplanes, **non-interleaved**, so each plane is a standalone 320x256x1
 bitmap. 320 pixels / 8 = **40 bytes per row**. Plane 1 is the
 text/HUD plane; whatever bit you set there shows up in the colour that
-plane 1 contributes (index bit 1). Text never touches plane 0 (game
-objects) or plane 2 (starfield).
+plane 1 contributes (index bit 1). Text normally never touches plane 0
+(game objects) or plane 2 (starfield) — the exception is the
+`DrawTextP0` entry point below, used by the title screen to stamp the
+power-up legend tokens into plane 0 so they pick up the copper band
+colours.
 
 A pixel at (x, y) lives at byte `y*40 + x/8`, bit `7 - (x & 7)`.
 `DrawText` sidesteps the bit math entirely by taking its x already
@@ -31,8 +34,14 @@ boundary and each character is exactly one byte wide.
 ; a0=nul-terminated string, d0=byte x (x/8), d1=y
 DrawText:
 	movem.l	d2-d3/a1-a3,-(sp)
-	WAITBLT
 	lea	Plane1,a1
+	bra.s	DrawTextGo
+; same, into plane 0: text gets the BandTab tint like game objects
+DrawTextP0:
+	movem.l	d2-d3/a1-a3,-(sp)
+	lea	Plane0,a1
+DrawTextGo:
+	WAITBLT
 	move.w	d1,d2
 	lsl.w	#5,d2			; y*32
 	move.w	d1,d3
@@ -47,6 +56,12 @@ DrawText:
 - `movem.l d2-d3/a1-a3,-(sp)` — callee-saves the registers it's about
   to trash. Callers lean on this: the title/HUD code fires off a dozen
   `DrawText` calls without reloading scratch regs.
+- Two entry points, one body: `DrawText` targets plane 1 (plain white
+  text), `DrawTextP0` targets plane 0, where the copper's `BandTab`
+  colour bands apply — that's how the title screen's `M+`/`S+` legend
+  tokens come out tinted while the descriptions next to them stay
+  white. Only the base plane differs; everything from `DrawTextGo` on
+  is shared.
 - `WAITBLT` — spin until the blitter is idle. Text is CPU-drawn, so why
   wait? Because the plane is usually **cleared by the blitter first**
   (`ClearRect` / `ClearGamePlanes` run a blit over plane 1). If the CPU
@@ -125,7 +140,9 @@ DrawText:
 Font:
 	dcb.b	8,0			; 32 space
 	dc.b	$18,$18,$18,$18,$18,$00,$18,$00	; 33 !
-	dcb.b	8*12,0			; 34-45
+	dcb.b	8*9,0			; 34-42
+	dc.b	$00,$18,$18,$7e,$18,$18,$00,$00	; 43 +
+	dcb.b	8*2,0			; 44-45
 	dc.b	$00,$00,$00,$00,$00,$18,$18,$00	; 46 .
 	dcb.b	8,0			; 47 /
 	dc.b	$3c,$66,$6e,$76,$66,$66,$3c,$00	; 0
@@ -151,8 +168,10 @@ The table runs contiguously from ASCII 32, so glyph *n* is at
 `Font + (n-32)*8`. Unused codes (most of 34–45, `/`, the gap after `9`,
 etc.) are filled with `dcb.b …,0` — blank glyphs — so any character in
 range renders *something* (usually blank) rather than reading past a
-short table. Coverage is space, `!`, `.`, `:`, `=`, digits `0-9`, and
-uppercase `A-Z` (`:` is used by the HUD `WAVE:n` counter). That's
+short table. Coverage is space, `!`, `+`, `.`, `:`, `=`, digits `0-9`,
+and uppercase `A-Z` (`:` is used by the HUD `WAVE:n` counter, `+` by
+the `M+`/`S+` power-up texts — it was added when a power-up rendered
+with an invisible plus sign out of the blank-slot pool). That's
 exactly why high-score names are uppercased and restricted to
 `A-Z 0-9 space`.
 

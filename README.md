@@ -61,6 +61,9 @@ original arcade cab). Text in plane 1, twinkling starfield in plane 2.
   `--joystick_port_1=keyboard`), left/right + fire.
 - 5 rows x 11 aliens: 30/20/10 points per row, UFO 50-300 random.
 - 4 destructible shields, pixel-level damage.
+- Power-ups: now and then a coloured `M+` (faster movement) or `S+`
+  (faster shot) drops from an alien — catch it with the cannon. Effects
+  stack, persist across waves, and are lost with the life.
 - 3 lives, wave counter, formation starts lower and marches faster
   each wave; high-score table (top 5, named) on the title screen. Beat
   a listed score and you type an 8-char name arcade-style: up/down

@@ -152,6 +152,7 @@ makes all stars pulse.
 
 ```asm
 	lea	BandTab(pc),a2
+	lea	PupColTab,a3		; power-up tint slot pointer table
 	moveq	#0,d4			; screen line 0..252 step 4
 .grad	move.w	d4,d0
 	add.w	#44,d0			; raster line
@@ -177,6 +178,13 @@ makes all stars pulse.
 	bsr	GradColor		; d0 = factor -> scaled COLOR00
 	move.w	#$0180,(a0)+		; COLOR00
 	move.w	d0,(a0)+
+	; power-up tint slot: COLOR02 (text) + COLOR03 (text over plane 0),
+	; white by default, PupTint/PupUntint poke the values via PupColTab
+	move.w	#$0184,(a0)+
+	move.l	a0,(a3)+
+	move.w	#$0fff,(a0)+
+	move.w	#$0186,(a0)+
+	move.w	#$0fff,(a0)+
 	addq.w	#4,d4
 	cmp.w	#256,d4
 	blt.s	.grad
@@ -186,7 +194,8 @@ makes all stars pulse.
 ```
 
 The loop runs 64 times, once per 4 screen lines, and each iteration
-emits: one WAIT, optionally one COLOR01 MOVE, and one COLOR00 MOVE.
+emits: one WAIT, optionally one COLOR01 MOVE, one COLOR00 MOVE, and a
+**power-up tint slot** (one COLOR02 MOVE + one COLOR03 MOVE).
 
 - `add.w #44,d0` — screen coordinates start at raster line 44 (that's
   where `DIWSTRT $2c81` put the top of the display window; `$2c` = 44).
@@ -217,14 +226,25 @@ emits: one WAIT, optionally one COLOR01 MOVE, and one COLOR00 MOVE.
   wave**: a per-entry factor scales the wave's top colour down to black.
   That's a feature in its own right, spanning `SetGradient`, `GradColor`
   and `GradStartTab` — **see `dive-gradient.md`** for the full line-by-line.
+- The **power-up tint slot** is the twinkle hook's trick, scaled up to
+  64 addresses: every 4-line step emits *MOVE $0fff → COLOR02* and
+  *MOVE $0fff → COLOR03*, and the address of the first value word goes
+  into the `PupColTab` pointer table (the COLOR03 value always sits 4
+  bytes behind it). While a power-up text falls (plane 1 = COLOR02;
+  COLOR03 covers its pixels that overlap plane-0 graphics), `PupTint`
+  pokes the three slots under the text with its `BandTab` colour and
+  `PupUntint` restores them to white — so the falling text cycles
+  through the same band colours as the plane-0 objects while all other
+  text (HUD, title) stays white, because its slots are never touched.
 - `move.l #$fffffffe,(a0)+` — the end sentinel, written as one
   longword (two words: `$ffff` position, `$fffe` mask): wait forever.
   The vertical blank restarts the Copper from the top of `CopBuf`.
 
 ## The payoff
 
-Total: ~230 copper instructions, ~920 bytes, generated once per wave. From then
+Total: ~360 copper instructions, ~1440 bytes, generated once per wave. From then
 on, per-scanline palette changes, plane pointer refresh and sprite
-pointer refresh all cost the CPU **zero cycles per frame**. This is the
+pointer refresh all cost the CPU **zero cycles per frame** (the power-up
+tint costs six word writes per frame, and only while one is falling). This is the
 Amiga's core design idea: the display is programmable hardware, and the
 CPU only edits that program when something actually changes.
