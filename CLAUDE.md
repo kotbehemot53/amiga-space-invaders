@@ -35,8 +35,17 @@ tools\vlink.exe -bamigahunk -Bstatic -o uae\dh0\invaders build\main.o
 - `roms/kick13.rom`: Kickstart 1.3 image, not redistributable (copied from
   `E:\_Moje_dydy\Documents\Projekty\amiga_exp\amiga-mrzx\roms`).
 - VSCode: extension `prb28.amiga-assembly`; `.vscode/settings.json` points
-  `amiga-assembly.binDir` at `tools/`, F5 = FS-UAE + GDB remote debugger,
-  Ctrl+Shift+B = build. "create ADF" task -> `build/invaders.adf`.
+  `amiga-assembly.binDir` at `tools/`, Ctrl+Shift+B = build,
+  "create ADF" task -> `build/invaders.adf`.
+- **Debugging (F5):** `.vscode/launch.json` has two source-level debug
+  configs, both `"type": "amiga-assembly"` (the unified adapter — the older
+  `"type": "fs-uae"` is deprecated and silently fails to attach). Pick in
+  Ctrl+Shift+D: **"FS-UAE Debug (A500)"** (default, cross-platform) or
+  **"WinUAE Debug (A500)"** (Windows only; `winuae.exe` is the prb28
+  gdbserver fork). Both build first (`preLaunchTask`), halt on entry
+  (`stopOnEntry`), then honour breakpoints. Breakpoints bind to emitted
+  instructions only — a label/comment/equate line won't take; put it on the
+  next real opcode. See the debug gotcha below if it just runs free.
 - Emulator keyboard-as-joystick: cursor keys + Right Ctrl/Alt = fire
   (`--joystick_port_1=keyboard`).
 
@@ -162,6 +171,15 @@ when changing the routines they quote.
   CPU-only tables must stay near code for `(pc)` addressing.
 - Chip RAM budget ~36 KB total — plenty of headroom, keep new gfx in
   `chipdata` and buffers in `chipbss`.
+- **Debugger runs free / never halts:** the WinUAE gdbserver breaks only
+  when the program whose AmigaDOS path == `debugging_trigger` is loaded, and
+  the adapter sets `debugging_trigger` = the launch config's `remoteProgram`.
+  It must match **exactly** the path `s/startup-sequence` uses to launch the
+  exe. That's why the startup-sequence runs `SYS:invaders` (not bare
+  `invaders`) and `remoteProgram` is `SYS:invaders` — mismatched strings =
+  gdbserver never fires = emulator runs full-speed, no stop, no error. If you
+  rename the exe or change how it boots, update both in lockstep. (Cost 6
+  rounds of red-herring config edits to find.)
 
 ## Testing without hands (emulator automation)
 

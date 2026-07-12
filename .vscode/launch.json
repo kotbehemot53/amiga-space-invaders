@@ -2,28 +2,40 @@
     "version": "0.2.0",
     "configurations": [
         {
-            "type": "fs-uae",
+            "type": "amiga-assembly",
             "request": "launch",
             "name": "FS-UAE Debug (A500)",
             "stopOnEntry": true,
-            "serverName": "localhost",
-            "serverPort": 6860,
-            "startEmulator": true,
-            "windows": {
-                "emulator": "${config:amiga-assembly.binDir}/fs-uae.exe"
-            },
-            "emulatorWorkingDir": "${config:amiga-assembly.binDir}",
+            "emulatorType": "fs-uae",
             "program": "${workspaceFolder}/uae/dh0/invaders",
-            "options": [
+            "remoteProgram": "SYS:invaders",
+            "emulatorArgs": [
                 "--amiga_model=A500",
                 "--kickstart_file=${workspaceFolder}/roms/kick13.rom",
                 "--chip_memory=512",
                 "--slow_memory=512",
                 "--hard_drive_0=${workspaceFolder}/uae/dh0",
                 "--joystick_port_1=keyboard",
-                "--remote_debugger=200",
-                "--use_remote_debugger=true",
                 "--automatic_input_grab=0"
+            ],
+            "preLaunchTask": "amigaassembly: build"
+        },
+        {
+            "type": "amiga-assembly",
+            "request": "launch",
+            "name": "WinUAE Debug (A500)",
+            "stopOnEntry": true,
+            "emulatorType": "winuae",
+            "program": "${workspaceFolder}/uae/dh0/invaders",
+            "remoteProgram": "SYS:invaders",
+            "emulatorArgs": [
+                "-s", "use_gui=no",
+                "-s", "cpu_model=68000",
+                "-s", "chipmem_size=1",
+                "-s", "bogomem_size=2",
+                "-s", "fastmem_size=0",
+                "-s", "kickstart_rom_file=${workspaceFolder}/roms/kick13.rom",
+                "-s", "filesystem=rw,dh0:${workspaceFolder}/uae/dh0"
             ],
             "preLaunchTask": "amigaassembly: build"
         }
